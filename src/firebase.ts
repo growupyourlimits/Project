@@ -143,6 +143,16 @@ export async function listApprovedCoaches() {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+export async function listCoachServices(coachId: string) {
+  const snap = await getDocs(query(collection(db, 'coachServices'), where('coachId', '==', coachId), where('active', '==', true)));
+  return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+}
+
+export async function listCoachAvailability(coachId: string) {
+  const snap = await getDocs(query(collection(db, 'coachAvailability'), where('coachId', '==', coachId), where('status', '==', 'available')));
+  return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+}
+
 export async function createCoachService(data: { title:string; description:string; type:'single_session'|'package'|'subscription'; durationMinutes:number; priceCents:number; currency?:string }) {
   const user = auth.currentUser; if (!user) throw new Error('Accesso richiesto.');
   return addDoc(collection(db, 'coachServices'), { coachId:user.uid, ...data, currency:data.currency || 'EUR', active:true, createdAt:serverTimestamp(), updatedAt:serverTimestamp() });
