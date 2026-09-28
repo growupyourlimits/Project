@@ -1,0 +1,214 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile details for athletes and coaches",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Full name or display name",
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "description": "User account role",
+          "enum": ["athlete", "coach", "admin"]
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User avatar photo URL",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account registration timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["userId", "email", "displayName", "role"]
+    },
+    "ConsultationRequest": {
+      "title": "ConsultationRequest",
+      "description": "Booking and matching consultation request with a coach",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique request identifier",
+          "maxLength": 128
+        },
+        "athleteId": {
+          "type": "string",
+          "description": "UID of the athlete or 'guest'",
+          "maxLength": 128
+        },
+        "athleteName": {
+          "type": "string",
+          "description": "Name of the athlete requesting the consultation",
+          "maxLength": 100
+        },
+        "athleteEmail": {
+          "type": "string",
+          "description": "Email address of the athlete",
+          "maxLength": 128
+        },
+        "coachId": {
+          "type": "string",
+          "description": "Identifier of the chosen coach",
+          "maxLength": 64
+        },
+        "coachName": {
+          "type": "string",
+          "description": "Name of the chosen coach",
+          "maxLength": 100
+        },
+        "sport": {
+          "type": "string",
+          "description": "Sport category",
+          "maxLength": 64
+        },
+        "goal": {
+          "type": "string",
+          "description": "Fitness goal",
+          "maxLength": 100
+        },
+        "level": {
+          "type": "string",
+          "description": "Fitness experience level",
+          "maxLength": 100
+        },
+        "modality": {
+          "type": "string",
+          "description": "Training modality preference",
+          "maxLength": 100
+        },
+        "preferredSlot": {
+          "type": "string",
+          "description": "Selected consultation time slot",
+          "maxLength": 100
+        },
+        "status": {
+          "type": "string",
+          "description": "Request state",
+          "enum": ["pending", "confirmed", "completed", "cancelled"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the request was submitted",
+          "maxLength": 64
+        }
+      },
+      "required": ["athleteName", "athleteEmail", "coachName", "preferredSlot", "status"]
+    },
+    "CoachApplication": {
+      "title": "CoachApplication",
+      "description": "Application submitted by a sports coach to join GROW UP",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Application ID",
+          "maxLength": 128
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full name of the coach candidate",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "Professional email of the coach candidate",
+          "maxLength": 128
+        },
+        "discipline": {
+          "type": "string",
+          "description": "Primary sports discipline",
+          "maxLength": 100
+        },
+        "profileLink": {
+          "type": "string",
+          "description": "Link to CV, LinkedIn, or certifications",
+          "maxLength": 300
+        },
+        "status": {
+          "type": "string",
+          "description": "Review status of application",
+          "enum": ["submitted", "reviewed", "approved", "rejected"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Submission timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["fullName", "email", "discipline", "status"]
+    },
+    "ContactMessage": {
+      "title": "ContactMessage",
+      "description": "Contact or support message sent through the website",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Message ID",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Sender name",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "Sender email",
+          "maxLength": 128
+        },
+        "message": {
+          "type": "string",
+          "description": "Message content",
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Sent timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["name", "email", "message"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Registered athlete and coach user profiles"
+    },
+    "/consultationRequests/{requestId}": {
+      "schema": "ConsultationRequest",
+      "description": "Direct consultation and questionnaire match requests"
+    },
+    "/coachApplications/{applicationId}": {
+      "schema": "CoachApplication",
+      "description": "Candidate applications to join GROW UP coach network"
+    },
+    "/contactMessages/{messageId}": {
+      "schema": "ContactMessage",
+      "description": "User inquiries and support messages"
+    }
+  }
+}

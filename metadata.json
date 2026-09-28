@@ -1,0 +1,6 @@
+{
+  "name": "GROW UP - Trova il tuo Coach Sportivo",
+  "description": "Landing page moderna e responsive per GROW UP. Trova il coach sportivo ideale per i tuoi obiettivi, il tuo livello e il tuo stile di allenamento.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
