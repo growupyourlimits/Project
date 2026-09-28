@@ -37,6 +37,7 @@ export default function App() {
           onOpenQuestionnaire={handleOpenQuestionnaire}
           onOpenForCoaches={() => setActiveInfoModal('coaches')}
           onOpenLogin={() => setActiveInfoModal('login')}
+          onOpenDashboard={() => setIsDashboardOpen(true)}
         />
 
         {/* Main Landing Content */}
