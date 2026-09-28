@@ -303,35 +303,8 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                   </div>
                 )}
 
-                {/* Role Switcher */}
-                <div className="mt-5">
-                  <label className="block text-xs font-medium text-[#9EABA7] mb-1.5">
-                    Seleziona il tuo profilo
-                  </label>
-                  <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-[#111A1A] p-1">
-                    <button
-                      type="button"
-                      onClick={() => setLoginRole('athlete')}
-                      className={`min-h-[40px] py-2 text-xs font-semibold rounded-lg transition-all ${
-                        loginRole === 'athlete'
-                          ? 'bg-[#8EF5DC] text-[#080A0A]'
-                          : 'text-[#9EABA7] hover:text-[#F4F5F6]'
-                      }`}
-                    >
-                      Sono un Atleta
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLoginRole('coach')}
-                      className={`min-h-[40px] py-2 text-xs font-semibold rounded-lg transition-all ${
-                        loginRole === 'coach'
-                          ? 'bg-[#8EF5DC] text-[#080A0A]'
-                          : 'text-[#9EABA7] hover:text-[#F4F5F6]'
-                      }`}
-                    >
-                      Sono un Coach
-                    </button>
-                  </div>
+                <div className="mt-5 rounded-xl border border-white/10 bg-[#111A1A] p-3 text-xs text-[#9EABA7]">
+                  Tutti i nuovi account iniziano come Atleta. Per diventare Coach, accedi e invia la candidatura: il ruolo viene attivato solo dopo la verifica GROW UP.
                 </div>
 
                 {/* Google Sign In with Firebase */}
