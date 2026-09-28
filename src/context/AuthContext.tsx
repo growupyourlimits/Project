@@ -33,7 +33,7 @@ export const AuthProvider:React.FC<{children:React.ReactNode}>=({children})=>{
     });
     return()=>{unsubAuth();if(unsubProfile)unsubProfile();};
   },[]);
-  const isAdmin=useMemo(()=>Boolean(currentUser?.emailVerified&&currentUser.email?.toLowerCase()===ADMIN_EMAIL),[currentUser]);
+  const isAdmin=useMemo(()=>Boolean(currentUser?.email?.trim().toLowerCase()===ADMIN_EMAIL.toLowerCase()),[currentUser]);
   const isCoach=profile?.role==='coach';
   return <AuthContext.Provider value={{currentUser,profile,loading,isAdmin,isCoach,signInWithGoogle:async()=>{await loginWithGoogle();},signOut:logoutUser}}>{children}</AuthContext.Provider>;
 };
