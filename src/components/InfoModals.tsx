@@ -23,9 +23,9 @@ export const InfoModals: React.FC<InfoModalProps> = ({
   const [coachProfileLink, setCoachProfileLink] = useState('');
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachSubmitted, setCoachSubmitted] = useState(false);
+  const [coachDocuments, setCoachDocuments] = useState<File[]>([]);
 
   // Login form state
-  const [loginRole, setLoginRole] = useState<'athlete' | 'coach'>('athlete');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -40,6 +40,10 @@ export const InfoModals: React.FC<InfoModalProps> = ({
 
   const handleCoachSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      setAuthError('Accedi con Google prima di inviare la candidatura coach.');
+      return;
+    }
     setCoachLoading(true);
     try {
       await submitCoachApplication({
@@ -47,6 +51,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         email: coachEmail,
         discipline: coachDiscipline,
         profileLink: coachProfileLink,
+        documents: coachDocuments,
       });
       setCoachSubmitted(true);
     } catch (err) {
@@ -61,7 +66,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
     setAuthLoading(true);
     setAuthError(null);
     try {
-      await signInWithGoogle(loginRole);
+      await signInWithGoogle();
     } catch (err) {
       console.error(err);
       setAuthError('Accesso non riuscito. Verifica la connessione e riprova.');
@@ -195,6 +200,12 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">Documenti di qualifica (PDF/immagini)</label>
+                    <input type="file" multiple accept=".pdf,image/*" onChange={(e) => setCoachDocuments(Array.from(e.target.files || []))} className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-2 text-xs text-[#9EABA7]" />
+                    <p className="mt-1 text-[11px] text-[#65716f]">Carica laurea, brevetti o certificazioni utili alla verifica.</p>
+                  </div>
+
                   <button
                     type="submit"
                     disabled={coachLoading}
@@ -253,7 +264,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                 </div>
                 <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-[#8EF5DC]/30 bg-[#8EF5DC]/10 px-3 py-1 text-xs font-semibold text-[#8EF5DC]">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  Autenticato su Firebase • {profile?.role === 'coach' ? 'Coach' : 'Atleta'}
+                  Autenticato su Firebase • {profile?.role === 'admin' ? 'Admin' : profile?.role === 'coach' ? 'Coach' : 'Atleta'}
                 </div>
                 <h4 className="mt-3 text-xl font-bold text-[#F4F5F6]">
                   {currentUser.displayName || 'Utente GROW UP'}
@@ -300,35 +311,8 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                   </div>
                 )}
 
-                {/* Role Switcher */}
-                <div className="mt-5">
-                  <label className="block text-xs font-medium text-[#9EABA7] mb-1.5">
-                    Seleziona il tuo profilo
-                  </label>
-                  <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-[#111A1A] p-1">
-                    <button
-                      type="button"
-                      onClick={() => setLoginRole('athlete')}
-                      className={`min-h-[40px] py-2 text-xs font-semibold rounded-lg transition-all ${
-                        loginRole === 'athlete'
-                          ? 'bg-[#8EF5DC] text-[#080A0A]'
-                          : 'text-[#9EABA7] hover:text-[#F4F5F6]'
-                      }`}
-                    >
-                      Sono un Atleta
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLoginRole('coach')}
-                      className={`min-h-[40px] py-2 text-xs font-semibold rounded-lg transition-all ${
-                        loginRole === 'coach'
-                          ? 'bg-[#8EF5DC] text-[#080A0A]'
-                          : 'text-[#9EABA7] hover:text-[#F4F5F6]'
-                      }`}
-                    >
-                      Sono un Coach
-                    </button>
-                  </div>
+                <div className="mt-5 rounded-xl border border-white/10 bg-[#111A1A] p-3 text-xs text-[#9EABA7]">
+                  Tutti i nuovi account iniziano come Atleta. Per diventare Coach, accedi e invia la candidatura: il ruolo viene attivato solo dopo la verifica GROW UP.
                 </div>
 
                 {/* Google Sign In with Firebase */}
@@ -361,7 +345,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                         />
                       </svg>
                     )}
-                    <span>Continua con Google ({loginRole === 'athlete' ? 'Atleta' : 'Coach'})</span>
+                    <span>Continua con Google (Atleta)</span>
                   </button>
 
                   <div className="pt-2 text-center text-xs text-[#8E9B98]">

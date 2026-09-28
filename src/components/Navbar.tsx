@@ -6,14 +6,16 @@ interface NavbarProps {
   onOpenQuestionnaire: () => void;
   onOpenForCoaches: () => void;
   onOpenLogin: () => void;
+  onOpenDashboard: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenQuestionnaire,
   onOpenForCoaches,
   onOpenLogin,
+  onOpenDashboard,
 }) => {
-  const { currentUser, profile } = useAuth();
+  const { currentUser, profile, isAdmin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const scrollToSection = (id: string) => {
@@ -58,7 +60,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           {currentUser ? (
             <button
-              onClick={onOpenLogin}
+              onClick={onOpenDashboard}
               id="nav-link-profilo"
               className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/10 bg-[#111A1A] px-3 py-1.5 text-xs font-medium text-[#F4F5F6] hover:border-[#8EF5DC]/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8EF5DC]"
             >
@@ -75,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
               <span className="max-w-[120px] truncate">{currentUser.displayName || 'Profilo'}</span>
               <span className="rounded-full bg-[#8EF5DC]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#8EF5DC]">
-                {profile?.role === 'coach' ? 'Coach' : 'Atleta'}
+                {isAdmin ? 'Admin' : profile?.role === 'coach' ? 'Coach' : 'Atleta'}
               </span>
             </button>
           ) : (
@@ -139,7 +141,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  onOpenLogin();
+                  onOpenDashboard();
                 }}
                 className="flex min-h-[48px] items-center justify-between text-left text-base font-medium text-[#F4F5F6] px-2 border-b border-white/5 transition-colors"
               >
@@ -158,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="truncate max-w-[180px]">{currentUser.displayName || 'Mio Profilo'}</span>
                 </div>
                 <span className="rounded-full bg-[#8EF5DC]/10 px-2 py-0.5 text-xs font-semibold text-[#8EF5DC]">
-                  {profile?.role === 'coach' ? 'Coach' : 'Atleta'}
+                  {isAdmin ? 'Admin' : profile?.role === 'coach' ? 'Coach' : 'Atleta'}
                 </span>
               </button>
             ) : (

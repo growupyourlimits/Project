@@ -1,0 +1,23 @@
+{
+  "firestore": {
+    "database": "ai-studio-growuptrovailtuo-63bb31f1-d891-47d4-91db-28803cbf2753",
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

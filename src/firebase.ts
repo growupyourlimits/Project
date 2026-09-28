@@ -1,235 +1,218 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-  User,
-} from 'firebase/auth';
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  collection,
-  addDoc,
-  query,
-  where,
-  getDocs,
-  getDocFromServer,
-  onSnapshot,
+  getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs,
+  onSnapshot, serverTimestamp, writeBatch, orderBy, runTransaction
 } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Initialize Firebase App
 const app = initializeApp(firebaseConfig);
-
-// CRITICAL: Initialize Firestore with the exact firestoreDatabaseId from configuration
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+export const ADMIN_EMAIL = 'growupyourlimits@gmail.com';
 
-// Error Handling Infrastructure adhering to Firebase Skill
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+export enum OperationType { CREATE='create', UPDATE='update', DELETE='delete', LIST='list', GET='get', WRITE='write' }
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  console.error('Firebase error', { error, operationType, path, uid: auth.currentUser?.uid });
+  throw error instanceof Error ? error : new Error(String(error));
 }
 
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
-export function handleFirestoreError(
-  error: unknown,
-  operationType: OperationType,
-  path: string | null
-): never {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo:
-        auth.currentUser?.providerData?.map((provider) => ({
-          providerId: provider.providerId,
-          email: provider.email,
-        })) || [],
-    },
-    operationType,
-    path,
-  };
-  console.error('Firestore Error:', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-// CRITICAL CONSTRAINT: Test connection on initialization
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline. Check connection or project settings.');
-    }
+export async function loginWithGoogle() {
+  const result = await signInWithPopup(auth, googleProvider);
+  const user = result.user;
+  const userRef = doc(db, 'users', user.uid);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) {
+    await setDoc(userRef, {
+      userId: user.uid,
+      email: user.email || '',
+      displayName: user.displayName || 'Utente GROW UP',
+      role: 'athlete',
+      photoURL: user.photoURL || '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }
-}
-testConnection();
-
-// --- Auth Utilities ---
-export async function loginWithGoogle(preferredRole: 'athlete' | 'coach' = 'athlete') {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-
-    // Check or create user profile
-    const userDocRef = doc(db, 'users', user.uid);
-    try {
-      const snap = await getDoc(userDocRef);
-      if (!snap.exists()) {
-        const newProfile = {
-          userId: user.uid,
-          email: user.email || '',
-          displayName: user.displayName || 'Utente GROW UP',
-          role: preferredRole,
-          photoURL: user.photoURL || '',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        await setDoc(userDocRef, newProfile);
-      }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
-    }
-    return user;
-  } catch (error) {
-    console.error('Google Sign-In failed:', error);
-    throw error;
-  }
+  return user;
 }
 
-export async function logoutUser() {
-  try {
-    await signOut(auth);
-  } catch (error) {
-    console.error('Sign-out error:', error);
-    throw error;
-  }
-}
-
-// --- Data Submission Helpers ---
-
-export interface ConsultationSubmission {
-  athleteName: string;
-  athleteEmail: string;
-  coachId: string;
-  coachName: string;
-  sport?: string;
-  goal?: string;
-  level?: string;
-  modality?: string;
-  preferredSlot: string;
-}
-
-export async function submitConsultationRequest(data: ConsultationSubmission) {
-  const currentUid = auth.currentUser?.uid;
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const payload = {
-    id: requestId,
-    athleteId: currentUid || 'guest',
-    athleteName: data.athleteName.trim().slice(0, 100),
-    athleteEmail: data.athleteEmail.trim().toLowerCase().slice(0, 128),
-    coachId: data.coachId.slice(0, 64),
-    coachName: data.coachName.trim().slice(0, 100),
-    sport: data.sport ? data.sport.slice(0, 64) : 'Generale',
-    goal: data.goal ? data.goal.slice(0, 100) : 'Benessere',
-    level: data.level ? data.level.slice(0, 100) : 'Principiante',
-    modality: data.modality ? data.modality.slice(0, 100) : 'Online',
-    preferredSlot: data.preferredSlot.slice(0, 100),
-    status: 'pending' as const,
-    createdAt: new Date().toISOString(),
-  };
-
-  try {
-    const docRef = doc(db, 'consultationRequests', requestId);
-    await setDoc(docRef, payload);
-    return requestId;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `consultationRequests/${requestId}`);
-  }
-}
+export const logoutUser = () => signOut(auth);
 
 export interface CoachApplicationSubmission {
   fullName: string;
   email: string;
   discipline: string;
   profileLink?: string;
+  bio?: string;
+  experienceYears?: number;
+  documents?: File[];
 }
 
 export async function submitCoachApplication(data: CoachApplicationSubmission) {
-  const appId = `app_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const payload = {
-    id: appId,
-    fullName: data.fullName.trim().slice(0, 100),
-    email: data.email.trim().toLowerCase().slice(0, 128),
-    discipline: data.discipline.trim().slice(0, 100),
-    profileLink: data.profileLink ? data.profileLink.trim().slice(0, 300) : '',
-    status: 'submitted' as const,
-    createdAt: new Date().toISOString(),
-  };
+  const user = auth.currentUser;
+  if (!user) throw new Error('Devi accedere prima di candidarti come coach.');
+
+  const applicationRef = doc(collection(db, 'coachApplications'));
+  const documentPaths: string[] = [];
 
   try {
-    const docRef = doc(db, 'coachApplications', appId);
-    await setDoc(docRef, payload);
-    return appId;
+    for (const [index, file] of (data.documents || []).entries()) {
+      const allowedType = file.type === 'application/pdf' || file.type.startsWith('image/');
+      if (!allowedType) throw new Error('Sono ammessi solo documenti PDF o immagini.');
+      if (file.size >= 10 * 1024 * 1024) throw new Error('Ogni documento deve essere inferiore a 10 MB.');
+
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `coach-documents/${user.uid}/${applicationRef.id}/${index}-${safeName}`;
+      await uploadBytes(ref(storage, path), file, { contentType: file.type });
+      documentPaths.push(path);
+    }
+
+    await setDoc(applicationRef, {
+      id: applicationRef.id,
+      applicantId: user.uid,
+      fullName: data.fullName.trim().slice(0, 100),
+      email: data.email.trim().toLowerCase().slice(0, 128),
+      discipline: data.discipline.trim().slice(0, 100),
+      profileLink: data.profileLink?.trim().slice(0, 300) || '',
+      bio: data.bio?.trim().slice(0, 1200) || '',
+      experienceYears: Math.max(0, Math.min(60, data.experienceYears || 0)),
+      documentPaths,
+      status: 'submitted',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return applicationRef.id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `coachApplications/${appId}`);
+    await Promise.allSettled(documentPaths.map(path => deleteObject(ref(storage, path))));
+    throw error;
   }
 }
 
-export interface ContactMessageSubmission {
-  name: string;
-  email: string;
-  message: string;
+export async function listMyCoachApplications(uid: string) {
+  const snap = await getDocs(query(collection(db, 'coachApplications'), where('applicantId', '==', uid)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-export async function submitContactMessage(data: ContactMessageSubmission) {
-  const msgId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const payload = {
-    id: msgId,
-    name: data.name.trim().slice(0, 100),
-    email: data.email.trim().toLowerCase().slice(0, 128),
-    message: data.message.trim().slice(0, 2000),
-    createdAt: new Date().toISOString(),
-  };
+export async function listPendingCoachApplications() {
+  const snap = await getDocs(query(collection(db, 'coachApplications'), where('status', '==', 'submitted')));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
-  try {
-    const docRef = doc(db, 'contactMessages', msgId);
-    await setDoc(docRef, payload);
-    return msgId;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `contactMessages/${msgId}`);
+export async function getCoachDocumentUrl(path: string) {
+  return getDownloadURL(ref(storage, path));
+}
+
+export async function reviewCoachApplication(applicationId: string, applicantId: string, approved: boolean, reason = '') {
+  const admin = auth.currentUser;
+  if (!admin || admin.email?.toLowerCase() !== ADMIN_EMAIL || !admin.emailVerified) throw new Error('Operazione riservata all’amministratore.');
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'coachApplications', applicationId), {
+    status: approved ? 'approved' : 'rejected',
+    reviewedAt: serverTimestamp(),
+    reviewedBy: admin.uid,
+    rejectionReason: approved ? '' : reason.slice(0, 500),
+    updatedAt: serverTimestamp(),
+  });
+  if (approved) {
+    batch.update(doc(db, 'users', applicantId), { role: 'coach', updatedAt: serverTimestamp() });
+    batch.set(doc(db, 'coachProfiles', applicantId), {
+      coachId: applicantId,
+      verificationStatus: 'approved',
+      active: true,
+      rating: 0,
+      reviewCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
   }
+  await batch.commit();
 }
 
-export { onAuthStateChanged };
+export interface CoachProfileInput {
+  displayName: string; headline: string; bio: string; discipline: string;
+  tags: string[]; modalities: string[]; experienceYears: number; specialties: string[]; photoURL?: string;
+}
+export async function saveCoachProfile(data: CoachProfileInput) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Accesso richiesto.');
+  await setDoc(doc(db, 'coachProfiles', user.uid), {
+    coachId: user.uid, ...data,
+    tags: data.tags.slice(0, 12), modalities: data.modalities.slice(0, 5), specialties: data.specialties.slice(0, 12),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+export async function listApprovedCoaches() {
+  const snap = await getDocs(query(collection(db, 'coachProfiles'), where('active', '==', true), where('verificationStatus', '==', 'approved')));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function listCoachServices(coachId: string) {
+  const snap = await getDocs(query(collection(db, 'coachServices'), where('coachId', '==', coachId), where('active', '==', true)));
+  return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+}
+
+export async function listCoachAvailability(coachId: string) {
+  const snap = await getDocs(query(collection(db, 'coachAvailability'), where('coachId', '==', coachId), where('status', '==', 'available')));
+  return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+}
+
+export async function createCoachService(data: { title:string; description:string; type:'single_session'|'package'|'subscription'; durationMinutes:number; priceCents:number; currency?:string }) {
+  const user = auth.currentUser; if (!user) throw new Error('Accesso richiesto.');
+  return addDoc(collection(db, 'coachServices'), { coachId:user.uid, ...data, currency:data.currency || 'EUR', active:true, createdAt:serverTimestamp(), updatedAt:serverTimestamp() });
+}
+
+export async function createAvailabilitySlot(startAt: Date, endAt: Date) {
+  const user = auth.currentUser; if (!user) throw new Error('Accesso richiesto.');
+  if (endAt <= startAt) throw new Error('Orario non valido.');
+  return addDoc(collection(db, 'coachAvailability'), { coachId:user.uid, startAt, endAt, status:'available', createdAt:serverTimestamp() });
+}
+
+export async function createBooking(data: { coachId:string; serviceId:string; slotId:string }) {
+  const user = auth.currentUser; if (!user) throw new Error('Devi accedere per prenotare.');
+  const bookingRef = doc(collection(db, 'bookings'));
+  const slotRef = doc(db, 'coachAvailability', data.slotId);
+  await runTransaction(db, async tx => {
+    const slot = await tx.get(slotRef);
+    if (!slot.exists() || slot.data().coachId !== data.coachId || slot.data().status !== 'available') {
+      throw new Error('Questo orario non è più disponibile.');
+    }
+    tx.set(bookingRef, {
+      id: bookingRef.id, athleteId:user.uid, coachId:data.coachId, serviceId:data.serviceId, slotId:data.slotId,
+      status:'pending', paymentStatus:'unpaid', createdAt:serverTimestamp(), updatedAt:serverTimestamp()
+    });
+    tx.update(slotRef, { status:'reserved', bookingId:bookingRef.id, updatedAt:serverTimestamp() });
+  });
+  return bookingRef.id;
+}
+
+export async function listMyBookings(uid: string, role: 'athlete'|'coach'|'admin') {
+  const field = role === 'coach' ? 'coachId' : 'athleteId';
+  const snap = await getDocs(query(collection(db, 'bookings'), where(field, '==', uid)));
+  return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+}
+
+export interface ConsultationSubmission { athleteName:string; athleteEmail:string; coachId:string; coachName:string; sport?:string; goal?:string; level?:string; modality?:string; preferredSlot:string; }
+export async function submitConsultationRequest(data: ConsultationSubmission) {
+  const requestRef = doc(collection(db, 'consultationRequests'));
+  await setDoc(requestRef, {
+    id:requestRef.id, athleteId:auth.currentUser?.uid || 'guest', ...data,
+    athleteName:data.athleteName.trim().slice(0,100), athleteEmail:data.athleteEmail.trim().toLowerCase().slice(0,128),
+    status:'pending', createdAt:serverTimestamp()
+  });
+  return requestRef.id;
+}
+
+export async function submitContactMessage(data:{name:string;email:string;message:string}) {
+  const messageRef = doc(collection(db, 'contactMessages'));
+  await setDoc(messageRef, { id:messageRef.id, name:data.name.trim().slice(0,100), email:data.email.trim().toLowerCase().slice(0,128), message:data.message.trim().slice(0,2000), createdAt:serverTimestamp() });
+  return messageRef.id;
+}
+
+export { onAuthStateChanged, onSnapshot, query, where, collection, orderBy };
 export type { User };

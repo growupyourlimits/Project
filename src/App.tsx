@@ -8,9 +8,11 @@ import { FinalCta } from './components/FinalCta';
 import { Footer } from './components/Footer';
 import { QuestionnaireModal } from './components/QuestionnaireModal';
 import { InfoModals } from './components/InfoModals';
+import { Dashboard } from './components/Dashboard';
 
 export default function App() {
   const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState<boolean>(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const [activeInfoModal, setActiveInfoModal] = useState<
     'coaches' | 'login' | 'method' | 'contact' | 'privacy' | 'terms' | 'instagram' | null
   >(null);
@@ -35,6 +37,7 @@ export default function App() {
           onOpenQuestionnaire={handleOpenQuestionnaire}
           onOpenForCoaches={() => setActiveInfoModal('coaches')}
           onOpenLogin={() => setActiveInfoModal('login')}
+          onOpenDashboard={() => setIsDashboardOpen(true)}
         />
 
         {/* Main Landing Content */}
@@ -71,6 +74,8 @@ export default function App() {
           isOpen={isQuestionnaireOpen}
           onClose={() => setIsQuestionnaireOpen(false)}
         />
+
+        {isDashboardOpen && <Dashboard onClose={() => setIsDashboardOpen(false)} />}
 
         {/* Supporting Information & Action Modals */}
         <InfoModals

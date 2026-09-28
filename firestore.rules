@@ -1,139 +1,100 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn(){ return request.auth != null; }
+    function owner(uid){ return signedIn() && request.auth.uid == uid; }
+    function admin(){ return signedIn() && request.auth.token.email == 'growupyourlimits@gmail.com' && request.auth.token.email_verified == true; }
+    function coach(){ return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach'; }
 
-    // Default deny all unknown collections
-    match /{document=**} {
-      allow read, write: if false;
+    match /users/{uid} {
+      allow read: if owner(uid) || admin();
+      allow create: if owner(uid) && request.resource.data.userId == uid && request.resource.data.role == 'athlete';
+      allow update: if admin() || (owner(uid) && request.resource.data.userId == resource.data.userId &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','photoURL','updatedAt']));
+      allow delete: if admin();
     }
 
-    function isSignedIn() {
-      return request.auth != null;
+    match /coachApplications/{id} {
+      allow create: if signedIn() && request.resource.data.applicantId == request.auth.uid && request.resource.data.status == 'submitted';
+      allow read: if admin() || (signedIn() && resource.data.applicantId == request.auth.uid);
+      allow update, delete: if admin();
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    match /coachProfiles/{uid} {
+      allow read: if resource.data.active == true && resource.data.verificationStatus == 'approved' || owner(uid) || admin();
+      allow create: if admin();
+      allow update: if admin() || (owner(uid) && coach() &&
+        request.resource.data.coachId == uid &&
+        request.resource.data.verificationStatus == resource.data.verificationStatus &&
+        request.resource.data.active == resource.data.active &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','headline','bio','discipline','tags','modalities','experienceYears','specialties','photoURL','updatedAt']));
+      allow delete: if admin();
     }
 
-    function isAdmin() {
-      return isSignedIn() &&
-        request.auth.token.email == 'growupyourlimits@gmail.com' &&
-        request.auth.token.email_verified == true;
+    match /coachServices/{id} {
+      allow read: if resource.data.active == true || admin() || (signedIn() && resource.data.coachId == request.auth.uid);
+      allow create: if coach() && request.resource.data.coachId == request.auth.uid;
+      allow update, delete: if admin() || (coach() && resource.data.coachId == request.auth.uid &&
+        request.resource.data.coachId == resource.data.coachId);
     }
 
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    match /coachAvailability/{id} {
+      allow read: if resource.data.status == 'available' || admin() || (signedIn() && resource.data.coachId == request.auth.uid);
+      allow create: if coach() && request.resource.data.coachId == request.auth.uid && request.resource.data.status == 'available';
+      allow update: if admin() ||
+        (coach() && resource.data.coachId == request.auth.uid && request.resource.data.coachId == resource.data.coachId) ||
+        (signedIn() &&
+          resource.data.status == 'available' &&
+          request.resource.data.coachId == resource.data.coachId &&
+          request.resource.data.status == 'reserved' &&
+          request.resource.data.bookingId is string &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','bookingId','updatedAt']) &&
+          getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.athleteId == request.auth.uid &&
+          getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.coachId == resource.data.coachId &&
+          getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.slotId == id);
+      allow delete: if admin() || (coach() && resource.data.coachId == request.auth.uid);
     }
 
-    function incoming() {
-      return request.resource.data;
+    match /bookings/{id} {
+      allow create: if signedIn() && request.resource.data.athleteId == request.auth.uid &&
+        request.resource.data.status == 'pending' && request.resource.data.paymentStatus == 'unpaid' &&
+        request.resource.data.coachId is string && request.resource.data.serviceId is string && request.resource.data.slotId is string &&
+        get(/databases/$(database)/documents/coachServices/$(request.resource.data.serviceId)).data.coachId == request.resource.data.coachId &&
+        get(/databases/$(database)/documents/coachServices/$(request.resource.data.serviceId)).data.active == true &&
+        getAfter(/databases/$(database)/documents/coachAvailability/$(request.resource.data.slotId)).data.coachId == request.resource.data.coachId &&
+        getAfter(/databases/$(database)/documents/coachAvailability/$(request.resource.data.slotId)).data.status == 'reserved' &&
+        getAfter(/databases/$(database)/documents/coachAvailability/$(request.resource.data.slotId)).data.bookingId == id;
+      allow read: if admin() || (signedIn() && (resource.data.athleteId == request.auth.uid || resource.data.coachId == request.auth.uid));
+      allow update: if admin() || (coach() && resource.data.coachId == request.auth.uid &&
+        request.resource.data.athleteId == resource.data.athleteId &&
+        request.resource.data.coachId == resource.data.coachId &&
+        request.resource.data.serviceId == resource.data.serviceId &&
+        request.resource.data.slotId == resource.data.slotId &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.status in ['pending','confirmed','completed','cancelled'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));
+      allow delete: if admin();
     }
 
-    function existing() {
-      return resource.data;
+    match /consultationRequests/{id} {
+      allow create: if request.resource.data.status == 'pending' &&
+        request.resource.data.athleteName is string && request.resource.data.athleteName.size() > 0 && request.resource.data.athleteName.size() <= 100 &&
+        request.resource.data.athleteEmail is string && request.resource.data.athleteEmail.size() > 3 && request.resource.data.athleteEmail.size() <= 128 &&
+        request.resource.data.coachId is string && request.resource.data.coachName is string &&
+        request.resource.data.preferredSlot is string && request.resource.data.preferredSlot.size() <= 100;
+      allow read: if admin() || (signedIn() && (resource.data.athleteId == request.auth.uid || resource.data.coachId == request.auth.uid));
+      allow update: if admin() || (coach() && resource.data.coachId == request.auth.uid);
+      allow delete: if admin();
     }
 
-    // --- Validation Helper: UserProfile ---
-    function isValidUser(data) {
-      return data.keys().hasAll(['userId', 'email', 'displayName', 'role']) &&
-        data.keys().hasOnly(['userId', 'email', 'displayName', 'role', 'photoURL', 'createdAt', 'updatedAt']) &&
-        data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
-        data.email is string && data.email.size() > 3 && data.email.size() <= 128 &&
-        data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
-        data.role in ['athlete', 'coach', 'admin'] &&
-        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
-        (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
-        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    match /contactMessages/{id} {
+      allow create: if request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100 &&
+        request.resource.data.email is string && request.resource.data.email.size() > 3 && request.resource.data.email.size() <= 128 &&
+        request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 2000;
+      allow read, update, delete: if admin();
     }
 
-    // --- Validation Helper: ConsultationRequest ---
-    function isValidConsultationRequest(data) {
-      return data.keys().hasAll(['athleteName', 'athleteEmail', 'coachName', 'preferredSlot', 'status']) &&
-        data.keys().hasOnly(['id', 'athleteId', 'athleteName', 'athleteEmail', 'coachId', 'coachName', 'sport', 'goal', 'level', 'modality', 'preferredSlot', 'status', 'createdAt']) &&
-        data.athleteName is string && data.athleteName.size() > 0 && data.athleteName.size() <= 100 &&
-        data.athleteEmail is string && data.athleteEmail.size() > 3 && data.athleteEmail.size() <= 128 &&
-        data.coachName is string && data.coachName.size() > 0 && data.coachName.size() <= 100 &&
-        data.preferredSlot is string && data.preferredSlot.size() > 0 && data.preferredSlot.size() <= 100 &&
-        data.status in ['pending', 'confirmed', 'completed', 'cancelled'] &&
-        (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
-        (!('athleteId' in data) || (data.athleteId is string && data.athleteId.size() <= 128)) &&
-        (!('coachId' in data) || (data.coachId is string && data.coachId.size() <= 64)) &&
-        (!('sport' in data) || (data.sport is string && data.sport.size() <= 64)) &&
-        (!('goal' in data) || (data.goal is string && data.goal.size() <= 100)) &&
-        (!('level' in data) || (data.level is string && data.level.size() <= 100)) &&
-        (!('modality' in data) || (data.modality is string && data.modality.size() <= 100)) &&
-        (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
-    }
-
-    // --- Validation Helper: CoachApplication ---
-    function isValidCoachApplication(data) {
-      return data.keys().hasAll(['fullName', 'email', 'discipline', 'status']) &&
-        data.keys().hasOnly(['id', 'fullName', 'email', 'discipline', 'profileLink', 'status', 'createdAt']) &&
-        data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 100 &&
-        data.email is string && data.email.size() > 3 && data.email.size() <= 128 &&
-        data.discipline is string && data.discipline.size() > 0 && data.discipline.size() <= 100 &&
-        data.status in ['submitted', 'reviewed', 'approved', 'rejected'] &&
-        (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
-        (!('profileLink' in data) || (data.profileLink is string && data.profileLink.size() <= 300)) &&
-        (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
-    }
-
-    // --- Validation Helper: ContactMessage ---
-    function isValidContactMessage(data) {
-      return data.keys().hasAll(['name', 'email', 'message']) &&
-        data.keys().hasOnly(['id', 'name', 'email', 'message', 'createdAt']) &&
-        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-        data.email is string && data.email.size() > 3 && data.email.size() <= 128 &&
-        data.message is string && data.message.size() > 0 && data.message.size() <= 2000 &&
-        (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
-        (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
-    }
-
-    // 1. Users collection
-    match /users/{userId} {
-      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isValidId(userId) && isOwner(userId) && isValidUser(incoming()) && incoming().userId == userId;
-      allow update: if isValidId(userId) && isValidUser(incoming()) && (
-        (isOwner(userId) && incoming().userId == existing().userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt'])) ||
-        isAdmin()
-      );
-      allow delete: if isAdmin();
-    }
-
-    // 2. Consultation Requests collection
-    match /consultationRequests/{requestId} {
-      allow get: if isValidId(requestId) && (
-        isAdmin() ||
-        (isSignedIn() && resource.data.athleteId == request.auth.uid)
-      );
-      allow list: if isAdmin() || (isSignedIn() && resource.data.athleteId == request.auth.uid);
-      allow create: if isValidId(requestId) && isValidConsultationRequest(incoming());
-      allow update: if isValidId(requestId) && isAdmin();
-      allow delete: if isValidId(requestId) && isAdmin();
-    }
-
-    // 3. Coach Applications collection
-    match /coachApplications/{applicationId} {
-      allow get: if isValidId(applicationId) && isAdmin();
-      allow list: if isAdmin();
-      allow create: if isValidId(applicationId) && isValidCoachApplication(incoming());
-      allow update: if isValidId(applicationId) && isAdmin();
-      allow delete: if isValidId(applicationId) && isAdmin();
-    }
-
-    // 4. Contact Messages collection
-    match /contactMessages/{messageId} {
-      allow get: if isValidId(messageId) && isAdmin();
-      allow list: if isAdmin();
-      allow create: if isValidId(messageId) && isValidContactMessage(incoming());
-      allow update: if isValidId(messageId) && isAdmin();
-      allow delete: if isValidId(messageId) && isAdmin();
-    }
-
-    // 5. Test connection collection
-    match /test/{docId} {
-      allow read: if true;
-    }
+    match /{document=**} { allow read, write: if false; }
   }
 }

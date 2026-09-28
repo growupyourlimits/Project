@@ -2,213 +2,432 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "User profile details for athletes and coaches",
+      "description": "Authenticated GROW UP user",
       "type": "object",
       "properties": {
         "userId": {
-          "type": "string",
-          "description": "Firebase Auth UID of the user",
-          "maxLength": 128
+          "type": "string"
         },
         "email": {
-          "type": "string",
-          "description": "Email address of the user",
-          "maxLength": 128
+          "type": "string"
         },
         "displayName": {
-          "type": "string",
-          "description": "Full name or display name",
-          "maxLength": 100
+          "type": "string"
+        },
+        "photoURL": {
+          "type": "string"
         },
         "role": {
           "type": "string",
-          "description": "User account role",
-          "enum": ["athlete", "coach", "admin"]
-        },
-        "photoURL": {
-          "type": "string",
-          "description": "User avatar photo URL",
-          "maxLength": 500
+          "enum": [
+            "athlete",
+            "coach",
+            "admin"
+          ]
         },
         "createdAt": {
-          "type": "string",
-          "description": "Account registration timestamp",
-          "maxLength": 64
+          "type": "string"
         },
         "updatedAt": {
-          "type": "string",
-          "description": "Last update timestamp",
-          "maxLength": 64
+          "type": "string"
         }
       },
-      "required": ["userId", "email", "displayName", "role"]
-    },
-    "ConsultationRequest": {
-      "title": "ConsultationRequest",
-      "description": "Booking and matching consultation request with a coach",
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique request identifier",
-          "maxLength": 128
-        },
-        "athleteId": {
-          "type": "string",
-          "description": "UID of the athlete or 'guest'",
-          "maxLength": 128
-        },
-        "athleteName": {
-          "type": "string",
-          "description": "Name of the athlete requesting the consultation",
-          "maxLength": 100
-        },
-        "athleteEmail": {
-          "type": "string",
-          "description": "Email address of the athlete",
-          "maxLength": 128
-        },
-        "coachId": {
-          "type": "string",
-          "description": "Identifier of the chosen coach",
-          "maxLength": 64
-        },
-        "coachName": {
-          "type": "string",
-          "description": "Name of the chosen coach",
-          "maxLength": 100
-        },
-        "sport": {
-          "type": "string",
-          "description": "Sport category",
-          "maxLength": 64
-        },
-        "goal": {
-          "type": "string",
-          "description": "Fitness goal",
-          "maxLength": 100
-        },
-        "level": {
-          "type": "string",
-          "description": "Fitness experience level",
-          "maxLength": 100
-        },
-        "modality": {
-          "type": "string",
-          "description": "Training modality preference",
-          "maxLength": 100
-        },
-        "preferredSlot": {
-          "type": "string",
-          "description": "Selected consultation time slot",
-          "maxLength": 100
-        },
-        "status": {
-          "type": "string",
-          "description": "Request state",
-          "enum": ["pending", "confirmed", "completed", "cancelled"]
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the request was submitted",
-          "maxLength": 64
-        }
-      },
-      "required": ["athleteName", "athleteEmail", "coachName", "preferredSlot", "status"]
+      "required": [
+        "userId",
+        "email",
+        "role"
+      ]
     },
     "CoachApplication": {
       "title": "CoachApplication",
-      "description": "Application submitted by a sports coach to join GROW UP",
+      "description": "Coach verification application linked to Firebase Auth",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Application ID",
-          "maxLength": 128
+        "applicantId": {
+          "type": "string"
         },
         "fullName": {
-          "type": "string",
-          "description": "Full name of the coach candidate",
-          "maxLength": 100
+          "type": "string"
         },
         "email": {
-          "type": "string",
-          "description": "Professional email of the coach candidate",
-          "maxLength": 128
+          "type": "string"
         },
         "discipline": {
-          "type": "string",
-          "description": "Primary sports discipline",
-          "maxLength": 100
+          "type": "string"
         },
         "profileLink": {
-          "type": "string",
-          "description": "Link to CV, LinkedIn, or certifications",
-          "maxLength": 300
+          "type": "string"
+        },
+        "documentPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "status": {
           "type": "string",
-          "description": "Review status of application",
-          "enum": ["submitted", "reviewed", "approved", "rejected"]
+          "enum": [
+            "submitted",
+            "reviewed",
+            "approved",
+            "rejected"
+          ]
+        },
+        "reviewNote": {
+          "type": "string"
+        },
+        "reviewedBy": {
+          "type": "string"
         },
         "createdAt": {
-          "type": "string",
-          "description": "Submission timestamp",
-          "maxLength": 64
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
         }
       },
-      "required": ["fullName", "email", "discipline", "status"]
+      "required": [
+        "applicantId",
+        "fullName",
+        "email",
+        "discipline",
+        "status"
+      ]
+    },
+    "CoachProfile": {
+      "title": "CoachProfile",
+      "description": "Public profile created for an approved coach",
+      "type": "object",
+      "properties": {
+        "coachId": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "headline": {
+          "type": "string"
+        },
+        "discipline": {
+          "type": "string"
+        },
+        "bio": {
+          "type": "string"
+        },
+        "photoURL": {
+          "type": "string"
+        },
+        "experienceYears": {
+          "type": "number"
+        },
+        "specialties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modalities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rating": {
+          "type": "number"
+        },
+        "reviewCount": {
+          "type": "number"
+        },
+        "verificationStatus": {
+          "type": "string",
+          "enum": [
+            "approved"
+          ]
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "coachId",
+        "displayName",
+        "verificationStatus",
+        "active"
+      ]
+    },
+    "CoachService": {
+      "title": "CoachService",
+      "description": "Bookable service published by an approved coach",
+      "type": "object",
+      "properties": {
+        "coachId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "single_session",
+            "package",
+            "subscription"
+          ]
+        },
+        "durationMinutes": {
+          "type": "number"
+        },
+        "priceCents": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "coachId",
+        "title",
+        "type",
+        "durationMinutes",
+        "priceCents",
+        "currency",
+        "active"
+      ]
+    },
+    "CoachAvailability": {
+      "title": "CoachAvailability",
+      "description": "Explicit coach availability slot",
+      "type": "object",
+      "properties": {
+        "coachId": {
+          "type": "string"
+        },
+        "startAt": {
+          "type": "string"
+        },
+        "endAt": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "available",
+            "reserved",
+            "booked",
+            "cancelled"
+          ]
+        },
+        "bookingId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "coachId",
+        "startAt",
+        "endAt",
+        "status"
+      ]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Atomic athlete booking of a coach service and availability slot",
+      "type": "object",
+      "properties": {
+        "athleteId": {
+          "type": "string"
+        },
+        "coachId": {
+          "type": "string"
+        },
+        "serviceId": {
+          "type": "string"
+        },
+        "slotId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "confirmed",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": [
+            "unpaid",
+            "pending",
+            "paid",
+            "refunded"
+          ]
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "athleteId",
+        "coachId",
+        "serviceId",
+        "slotId",
+        "status",
+        "paymentStatus"
+      ]
+    },
+    "ConsultationRequest": {
+      "title": "ConsultationRequest",
+      "description": "Legacy/free consultation request",
+      "type": "object",
+      "properties": {
+        "athleteId": {
+          "type": "string"
+        },
+        "athleteName": {
+          "type": "string"
+        },
+        "athleteEmail": {
+          "type": "string"
+        },
+        "coachId": {
+          "type": "string"
+        },
+        "coachName": {
+          "type": "string"
+        },
+        "sport": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "modality": {
+          "type": "string"
+        },
+        "preferredSlot": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "confirmed",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "athleteName",
+        "athleteEmail",
+        "coachId",
+        "coachName",
+        "preferredSlot",
+        "status"
+      ]
     },
     "ContactMessage": {
       "title": "ContactMessage",
-      "description": "Contact or support message sent through the website",
+      "description": "Website contact/support message",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Message ID",
-          "maxLength": 128
-        },
         "name": {
-          "type": "string",
-          "description": "Sender name",
-          "maxLength": 100
+          "type": "string"
         },
         "email": {
-          "type": "string",
-          "description": "Sender email",
-          "maxLength": 128
+          "type": "string"
         },
         "message": {
-          "type": "string",
-          "description": "Message content",
-          "maxLength": 2000
+          "type": "string"
         },
         "createdAt": {
-          "type": "string",
-          "description": "Sent timestamp",
-          "maxLength": 64
+          "type": "string"
         }
       },
-      "required": ["name", "email", "message"]
+      "required": [
+        "name",
+        "email",
+        "message"
+      ]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "Registered athlete and coach user profiles"
-    },
-    "/consultationRequests/{requestId}": {
-      "schema": "ConsultationRequest",
-      "description": "Direct consultation and questionnaire match requests"
+      "description": "Authenticated users and roles"
     },
     "/coachApplications/{applicationId}": {
       "schema": "CoachApplication",
-      "description": "Candidate applications to join GROW UP coach network"
+      "description": "Coach verification workflow"
+    },
+    "/coachProfiles/{coachId}": {
+      "schema": "CoachProfile",
+      "description": "Approved public coach profiles"
+    },
+    "/coachServices/{serviceId}": {
+      "schema": "CoachService",
+      "description": "Coach tariffs and services"
+    },
+    "/coachAvailability/{slotId}": {
+      "schema": "CoachAvailability",
+      "description": "Bookable coach time slots"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Athlete bookings"
+    },
+    "/consultationRequests/{requestId}": {
+      "schema": "ConsultationRequest",
+      "description": "Free consultation requests"
     },
     "/contactMessages/{messageId}": {
       "schema": "ContactMessage",
-      "description": "User inquiries and support messages"
+      "description": "Contact messages"
+    }
+  },
+  "storage": {
+    "/coach-documents/{uid}/{applicationId}/{fileName}": {
+      "description": "Private coach verification documents; applicant and admin access only"
     }
   }
 }

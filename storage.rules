@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn(){ return request.auth != null; }
+    function admin(){ return signedIn() && request.auth.token.email == 'growupyourlimits@gmail.com' && request.auth.token.email_verified == true; }
+    match /coach-documents/{uid}/{applicationId}/{fileName} {
+      allow create: if signedIn() && request.auth.uid == uid &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType != null &&
+        (request.resource.contentType == 'application/pdf' || request.resource.contentType.matches('image/.*'));
+      allow update, delete: if false;
+      allow read: if admin() || (signedIn() && request.auth.uid == uid);
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

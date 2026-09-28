@@ -21,8 +21,7 @@ import {
   TrainingModality,
   Coach,
 } from '../types';
-import { getFilteredCoaches } from '../data/coaches';
-import { submitConsultationRequest } from '../firebase';
+import { createBooking, listApprovedCoaches, listCoachAvailability, listCoachServices } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
 interface QuestionnaireModalProps {
@@ -68,11 +67,16 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
   const [showResults, setShowResults] = useState<boolean>(false);
   const [selectedCoachForBooking, setSelectedCoachForBooking] = useState<Coach | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
+  const [approvedCoaches, setApprovedCoaches] = useState<Coach[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<{id:string; label:string}[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [coachServices, setCoachServices] = useState<{id:string; title:string; priceCents:number; currency:string}[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState('');
 
   // Booking fields
   const [athleteName, setAthleteName] = useState<string>('');
   const [athleteEmail, setAthleteEmail] = useState<string>('');
-  const [preferredSlot, setPreferredSlot] = useState<string>('Domani - 10:00 (Mattina)');
+  const [preferredSlot, setPreferredSlot] = useState<string>('');
   const [bookingLoading, setBookingLoading] = useState<boolean>(false);
 
   // Pre-fill user if authenticated
@@ -86,6 +90,86 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
       }
     }
   }, [currentUser, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    listApprovedCoaches()
+      .then((profiles: any[]) => {
+        const coaches: Coach[] = profiles.map((p: any) => {
+          const displayName = p.displayName || 'Coach GROW UP';
+          const searchable = [p.discipline, ...(p.tags || []), ...(p.specialties || []), ...(p.modalities || [])]
+            .join(' ').toLowerCase();
+          let score = 70;
+          if (answers.sport && searchable.includes(answers.sport.toLowerCase())) score += 12;
+          if (answers.goal && searchable.includes(answers.goal.toLowerCase())) score += 8;
+          if (answers.modality && searchable.includes(answers.modality.toLowerCase())) score += 6;
+          return {
+            id: p.coachId || p.id,
+            name: displayName,
+            role: p.headline || p.discipline || 'Coach verificato',
+            badge: 'VERIFICATO',
+            tags: p.tags || [],
+            rating: Number(p.rating || 0),
+            reviewCount: Number(p.reviewCount || 0),
+            matchScore: Math.min(score, 96),
+            bio: p.bio || '',
+            avatarUrl: p.photoURL || '',
+            avatarInitials: displayName.split(/\s+/).slice(0, 2).map((x:string) => x[0]).join('').toUpperCase(),
+            modality: (p.modalities || []).join(' • ') || 'Da concordare',
+            availability: 'Consulta gli orari disponibili',
+            experience: p.experienceYears ? `${p.experienceYears} anni di esperienza` : 'Coach verificato',
+            specialties: p.specialties || [],
+          };
+        });
+        setApprovedCoaches(coaches.sort((a,b) => b.matchScore - a.matchScore));
+      })
+      .catch((err) => {
+        console.error('Errore caricamento coach approvati', err);
+        setApprovedCoaches([]);
+      });
+  }, [isOpen, answers.sport, answers.goal, answers.modality]);
+
+  useEffect(() => {
+    if (!selectedCoachForBooking) {
+      setAvailableSlots([]);
+      setPreferredSlot('');
+      setCoachServices([]);
+      setSelectedServiceId('');
+      return;
+    }
+    setSlotsLoading(true);
+    Promise.all([
+      listCoachAvailability(selectedCoachForBooking.id),
+      listCoachServices(selectedCoachForBooking.id)
+    ])
+      .then(([slots, services]:any[]) => {
+        const serviceList = services.map((s:any) => ({
+          id:s.id, title:s.title || 'Servizio coach', priceCents:Number(s.priceCents || 0), currency:s.currency || 'EUR'
+        }));
+        setCoachServices(serviceList);
+        setSelectedServiceId(serviceList[0]?.id || '');
+        return slots;
+      })
+      .then((slots:any[]) => {
+        const now = Date.now();
+        const formatted = slots
+          .map((slot:any) => {
+            const start = slot.startAt?.toDate ? slot.startAt.toDate() : new Date(slot.startAt);
+            return { id:slot.id, start, label:start.toLocaleString('it-IT', { weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) };
+          })
+          .filter((slot:any) => !Number.isNaN(slot.start.getTime()) && slot.start.getTime() > now)
+          .sort((a:any,b:any) => a.start.getTime() - b.start.getTime())
+          .map(({id,label}:any) => ({id,label}));
+        setAvailableSlots(formatted);
+        setPreferredSlot(formatted[0]?.label || '');
+      })
+      .catch((err) => {
+        console.error('Errore caricamento disponibilità coach', err);
+        setAvailableSlots([]);
+        setPreferredSlot('');
+      })
+      .finally(() => setSlotsLoading(false));
+  }, [selectedCoachForBooking]);
 
   // Close on ESC key
   useEffect(() => {
@@ -133,7 +217,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
     setBookingSuccess(false);
   };
 
-  const matchedCoaches = getFilteredCoaches(answers);
+  const matchedCoaches = approvedCoaches;
 
   return (
     <div
@@ -329,16 +413,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
                         if (!selectedCoachForBooking) return;
                         setBookingLoading(true);
                         try {
-                          await submitConsultationRequest({
-                            athleteName,
-                            athleteEmail,
+                          if (!currentUser) throw new Error('Accedi con Google per confermare una prenotazione.');
+                          const slot = availableSlots.find(s => s.label === preferredSlot);
+                          if (!slot || !selectedServiceId) throw new Error('Seleziona un servizio e un orario disponibili.');
+                          await createBooking({
                             coachId: selectedCoachForBooking.id,
-                            coachName: selectedCoachForBooking.name,
-                            sport: answers.sport,
-                            goal: answers.goal,
-                            level: answers.level,
-                            modality: answers.modality,
-                            preferredSlot,
+                            serviceId: selectedServiceId,
+                            slotId: slot.id,
                           });
                           setBookingSuccess(true);
                         } catch (err) {
@@ -380,23 +461,55 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
 
                       <div>
                         <label className="block text-xs font-medium text-[#9EABA7] mb-1">
+                          Servizio
+                        </label>
+                        {coachServices.length > 0 ? (
+                          <select
+                            required
+                            value={selectedServiceId}
+                            onChange={(e) => setSelectedServiceId(e.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
+                          >
+                            {coachServices.map(service => (
+                              <option key={service.id} value={service.id} className="bg-[#111A1A]">
+                                {service.title} · {(service.priceCents / 100).toLocaleString('it-IT', {style:'currency', currency:service.currency})}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
+                            Questo coach non ha ancora pubblicato servizi prenotabili.
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-[#9EABA7] mb-1">
                           Giorno e orario preferito per la call
                         </label>
-                        <select
-                          value={preferredSlot}
-                          onChange={(e) => setPreferredSlot(e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
-                        >
-                          <option className="bg-[#111A1A]">Domani - 10:00 (Mattina)</option>
-                          <option className="bg-[#111A1A]">Domani - 14:30 (Pomeriggio)</option>
-                          <option className="bg-[#111A1A]">Dopodomani - 18:30 (Sera)</option>
-                          <option className="bg-[#111A1A]">Sabato mattina - 10:30</option>
-                        </select>
+                        {slotsLoading ? (
+                          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Caricamento disponibilità...
+                          </div>
+                        ) : availableSlots.length > 0 ? (
+                          <select
+                            required
+                            value={preferredSlot}
+                            onChange={(e) => setPreferredSlot(e.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
+                          >
+                            {availableSlots.map(slot => <option key={slot.id} value={slot.label} className="bg-[#111A1A]">{slot.label}</option>)}
+                          </select>
+                        ) : (
+                          <div className="rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
+                            Questo coach non ha ancora pubblicato disponibilità.
+                          </div>
+                        )}
                       </div>
 
                       <button
                         type="submit"
-                        disabled={bookingLoading}
+                        disabled={bookingLoading || slotsLoading || availableSlots.length === 0 || coachServices.length === 0 || !currentUser}
                         className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] py-3 text-sm font-semibold text-[#080A0A] hover:bg-[#77eecf] disabled:opacity-50 transition-all min-h-[44px]"
                       >
                         {bookingLoading ? (
@@ -407,13 +520,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
                         ) : (
                           <>
                             <Calendar className="h-4 w-4" />
-                            Conferma richiesta gratuita
+                            Conferma prenotazione
                           </>
                         )}
                       </button>
 
                       <p className="text-center text-[11px] text-[#8E9B98]">
-                        Non ti verrà addebitato alcun costo. La tua richiesta viene memorizzata in modo sicuro su Firebase Firestore.
+                        Il pagamento non è ancora attivo: la prenotazione viene registrata con stato non pagato. Devi essere autenticato per confermare.
                       </p>
                     </form>
                   </div>
@@ -423,10 +536,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
                       <Check className="h-7 w-7" />
                     </div>
                     <h4 className="mt-4 text-2xl font-bold text-[#F4F5F6]">
-                      Richiesta inviata e registrata!
+                      Prenotazione registrata!
                     </h4>
                     <p className="mt-2 text-sm text-[#9EABA7] max-w-md mx-auto">
-                      Abbiamo registrato la tua richiesta per {selectedCoachForBooking.name} su Firebase. Ti contatterà all'indirizzo email fornito per confermare l'appuntamento.
+                      Abbiamo riservato lo slot con {selectedCoachForBooking.name}. La prenotazione è ora visibile nelle dashboard atleta e coach.
                     </p>
                     <button
                       onClick={onClose}
