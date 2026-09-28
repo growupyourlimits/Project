@@ -21,7 +21,7 @@ import {
   TrainingModality,
   Coach,
 } from '../types';
-import { listApprovedCoaches, listCoachAvailability, submitConsultationRequest } from '../firebase';
+import { createBooking, listApprovedCoaches, listCoachAvailability, listCoachServices } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
 interface QuestionnaireModalProps {
@@ -70,6 +70,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
   const [approvedCoaches, setApprovedCoaches] = useState<Coach[]>([]);
   const [availableSlots, setAvailableSlots] = useState<{id:string; label:string}[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [coachServices, setCoachServices] = useState<{id:string; title:string; priceCents:number; currency:string}[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState('');
 
   // Booking fields
   const [athleteName, setAthleteName] = useState<string>('');
@@ -131,10 +133,24 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
     if (!selectedCoachForBooking) {
       setAvailableSlots([]);
       setPreferredSlot('');
+      setCoachServices([]);
+      setSelectedServiceId('');
       return;
     }
     setSlotsLoading(true);
-    listCoachAvailability(selectedCoachForBooking.id)
+    Promise.all([
+      listCoachAvailability(selectedCoachForBooking.id),
+      listCoachServices(selectedCoachForBooking.id)
+    ])
+      .then(([slots, services]:any[]) => {
+        const serviceList = services.map((s:any) => ({
+          id:s.id, title:s.title || 'Servizio coach', priceCents:Number(s.priceCents || 0), currency:s.currency || 'EUR'
+        }));
+        setCoachServices(serviceList);
+        setSelectedServiceId(serviceList[0]?.id || '');
+        return slots;
+      })
+      .then((slots:any[]) =>
       .then((slots:any[]) => {
         const now = Date.now();
         const formatted = slots
@@ -398,16 +414,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
                         if (!selectedCoachForBooking) return;
                         setBookingLoading(true);
                         try {
-                          await submitConsultationRequest({
-                            athleteName,
-                            athleteEmail,
+                          if (!currentUser) throw new Error('Accedi con Google per confermare una prenotazione.');
+                          const slot = availableSlots.find(s => s.label === preferredSlot);
+                          if (!slot || !selectedServiceId) throw new Error('Seleziona un servizio e un orario disponibili.');
+                          await createBooking({
                             coachId: selectedCoachForBooking.id,
-                            coachName: selectedCoachForBooking.name,
-                            sport: answers.sport,
-                            goal: answers.goal,
-                            level: answers.level,
-                            modality: answers.modality,
-                            preferredSlot,
+                            serviceId: selectedServiceId,
+                            slotId: slot.id,
                           });
                           setBookingSuccess(true);
                         } catch (err) {
@@ -449,6 +462,30 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
 
                       <div>
                         <label className="block text-xs font-medium text-[#9EABA7] mb-1">
+                          Servizio
+                        </label>
+                        {coachServices.length > 0 ? (
+                          <select
+                            required
+                            value={selectedServiceId}
+                            onChange={(e) => setSelectedServiceId(e.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
+                          >
+                            {coachServices.map(service => (
+                              <option key={service.id} value={service.id} className="bg-[#111A1A]">
+                                {service.title} · {(service.priceCents / 100).toLocaleString('it-IT', {style:'currency', currency:service.currency})}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
+                            Questo coach non ha ancora pubblicato servizi prenotabili.
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-[#9EABA7] mb-1">
                           Giorno e orario preferito per la call
                         </label>
                         {slotsLoading ? (
@@ -473,7 +510,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
 
                       <button
                         type="submit"
-                        disabled={bookingLoading || slotsLoading || availableSlots.length === 0}
+                        disabled={bookingLoading || slotsLoading || availableSlots.length === 0 || coachServices.length === 0 || !currentUser}
                         className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] py-3 text-sm font-semibold text-[#080A0A] hover:bg-[#77eecf] disabled:opacity-50 transition-all min-h-[44px]"
                       >
                         {bookingLoading ? (
@@ -484,13 +521,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
                         ) : (
                           <>
                             <Calendar className="h-4 w-4" />
-                            Conferma richiesta gratuita
+                            Conferma prenotazione
                           </>
                         )}
                       </button>
 
                       <p className="text-center text-[11px] text-[#8E9B98]">
-                        Non ti verrà addebitato alcun costo. La tua richiesta viene memorizzata in modo sicuro su Firebase Firestore.
+                        Il pagamento non è ancora attivo: la prenotazione viene registrata con stato non pagato. Devi essere autenticato per confermare.
                       </p>
                     </form>
                   </div>
@@ -500,10 +537,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
                       <Check className="h-7 w-7" />
                     </div>
                     <h4 className="mt-4 text-2xl font-bold text-[#F4F5F6]">
-                      Richiesta inviata e registrata!
+                      Prenotazione registrata!
                     </h4>
                     <p className="mt-2 text-sm text-[#9EABA7] max-w-md mx-auto">
-                      Abbiamo registrato la tua richiesta per {selectedCoachForBooking.name} su Firebase. Ti contatterà all'indirizzo email fornito per confermare l'appuntamento.
+                      Abbiamo riservato lo slot con {selectedCoachForBooking.name}. La prenotazione è ora visibile nelle dashboard atleta e coach.
                     </p>
                     <button
                       onClick={onClose}
