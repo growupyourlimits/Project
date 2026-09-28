@@ -4,7 +4,7 @@ import {
   getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs,
   onSnapshot, serverTimestamp, writeBatch, orderBy, runTransaction
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -59,28 +59,37 @@ export async function submitCoachApplication(data: CoachApplicationSubmission) {
   const applicationRef = doc(collection(db, 'coachApplications'));
   const documentPaths: string[] = [];
 
-  for (const file of data.documents || []) {
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const path = `coach-documents/${user.uid}/${applicationRef.id}/${safeName}`;
-    await uploadBytes(ref(storage, path), file);
-    documentPaths.push(path);
-  }
+  try {
+    for (const [index, file] of (data.documents || []).entries()) {
+      const allowedType = file.type === 'application/pdf' || file.type.startsWith('image/');
+      if (!allowedType) throw new Error('Sono ammessi solo documenti PDF o immagini.');
+      if (file.size >= 10 * 1024 * 1024) throw new Error('Ogni documento deve essere inferiore a 10 MB.');
 
-  await setDoc(applicationRef, {
-    id: applicationRef.id,
-    applicantId: user.uid,
-    fullName: data.fullName.trim().slice(0, 100),
-    email: data.email.trim().toLowerCase().slice(0, 128),
-    discipline: data.discipline.trim().slice(0, 100),
-    profileLink: data.profileLink?.trim().slice(0, 300) || '',
-    bio: data.bio?.trim().slice(0, 1200) || '',
-    experienceYears: Math.max(0, Math.min(60, data.experienceYears || 0)),
-    documentPaths,
-    status: 'submitted',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return applicationRef.id;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `coach-documents/${user.uid}/${applicationRef.id}/${index}-${safeName}`;
+      await uploadBytes(ref(storage, path), file, { contentType: file.type });
+      documentPaths.push(path);
+    }
+
+    await setDoc(applicationRef, {
+      id: applicationRef.id,
+      applicantId: user.uid,
+      fullName: data.fullName.trim().slice(0, 100),
+      email: data.email.trim().toLowerCase().slice(0, 128),
+      discipline: data.discipline.trim().slice(0, 100),
+      profileLink: data.profileLink?.trim().slice(0, 300) || '',
+      bio: data.bio?.trim().slice(0, 1200) || '',
+      experienceYears: Math.max(0, Math.min(60, data.experienceYears || 0)),
+      documentPaths,
+      status: 'submitted',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return applicationRef.id;
+  } catch (error) {
+    await Promise.allSettled(documentPaths.map(path => deleteObject(ref(storage, path))));
+    throw error;
+  }
 }
 
 export async function listMyCoachApplications(uid: string) {
