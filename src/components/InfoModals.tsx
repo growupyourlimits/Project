@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
-import { X, Check, ShieldCheck, Mail, Send, Award, Clock, ArrowRight, UserCheck, LogOut, Loader2 } from 'lucide-react';
+import {
+  X,
+  Check,
+  ShieldCheck,
+  Mail,
+  Send,
+  Award,
+  Clock,
+  ArrowRight,
+  UserCheck,
+  LogOut,
+  Loader2,
+  ExternalLink,
+} from 'lucide-react';
 import { submitCoachApplication, submitContactMessage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '../context/NavigationContext';
+import { DISCIPLINES } from '../types';
 
 interface InfoModalProps {
   type: 'coaches' | 'login' | 'method' | 'contact' | 'privacy' | 'terms' | 'instagram' | null;
@@ -14,13 +29,16 @@ export const InfoModals: React.FC<InfoModalProps> = ({
   onClose,
   onOpenQuestionnaire,
 }) => {
-  const { currentUser, profile, signInWithGoogle, signOut } = useAuth();
+  const { currentUser, profile, isAdmin, isCoach, effectiveRole, signInWithGoogle, signOut } =
+    useAuth();
+  const { navigate } = useNavigation();
 
   // Coach form state
-  const [coachFullName, setCoachFullName] = useState('');
-  const [coachEmail, setCoachEmail] = useState('');
-  const [coachDiscipline, setCoachDiscipline] = useState('');
+  const [coachFullName, setCoachFullName] = useState(currentUser?.displayName || '');
+  const [coachEmail, setCoachEmail] = useState(currentUser?.email || '');
+  const [coachDiscipline, setCoachDiscipline] = useState<string>(DISCIPLINES[0]);
   const [coachProfileLink, setCoachProfileLink] = useState('');
+  const [coachBio, setCoachBio] = useState('');
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachSubmitted, setCoachSubmitted] = useState(false);
 
@@ -29,8 +47,8 @@ export const InfoModals: React.FC<InfoModalProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Contact form state
-  const [contactName, setContactName] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
+  const [contactName, setContactName] = useState(currentUser?.displayName || '');
+  const [contactEmail, setContactEmail] = useState(currentUser?.email || '');
   const [contactMessage, setContactMessage] = useState('');
   const [contactLoading, setContactLoading] = useState(false);
   const [contactSubmitted, setContactSubmitted] = useState(false);
@@ -50,11 +68,12 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         email: coachEmail,
         discipline: coachDiscipline,
         profileLink: coachProfileLink,
+        bio: coachBio,
       });
       setCoachSubmitted(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Impossibile inviare la candidatura. Riprova più tardi.');
+      alert(err.message || 'Impossibile inviare la candidatura. Riprova più tardi.');
     } finally {
       setCoachLoading(false);
     }
@@ -65,6 +84,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
     setAuthError(null);
     try {
       await signInWithGoogle();
+      onClose();
     } catch (err) {
       console.error(err);
       setAuthError('Accesso non riuscito. Verifica la connessione e riprova.');
@@ -95,7 +115,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/85 backdrop-blur-sm"
     >
       <div className="relative w-full max-w-xl rounded-3xl border border-white/10 bg-[#0C1212] p-6 sm:p-8 shadow-2xl text-[#F4F5F6] my-auto">
         {/* Close Button - Min 44x44px touch target */}
@@ -122,111 +142,46 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                   Diventa un Coach GROW UP
                 </h3>
                 <p className="mt-2 text-sm text-[#9EABA7] leading-relaxed">
-                  Connettiti con allievi motivati e in target con la tua specializzazione. Gestisci programmazioni, pagamenti e video feedback da un'unica interfaccia.
+                  Connettiti con allievi motivati e in target con la tua specializzazione. Gestisci
+                  disponibilità, orari e sessioni.
                 </p>
 
-                <div className="mt-5 space-y-2.5 text-xs text-[#E1E8E6]">
+                <div className="mt-5 space-y-2 text-xs text-[#E1E8E6]">
                   <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-[#8EF5DC]" />
-                    <span>Requisito: Laurea in Scienze Motorie o brevetto federale riconosciuto CONI</span>
+                    <Check className="h-4 w-4 text-[#8EF5DC] shrink-0" />
+                    <span>Requisito: Laurea in Scienze Motorie o brevetto tecnico CONI.</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-[#8EF5DC]" />
-                    <span>Nessun costo fisso o quota di ingresso</span>
+                    <Check className="h-4 w-4 text-[#8EF5DC] shrink-0" />
+                    <span>Nessun costo fisso o quota di ingresso.</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-[#8EF5DC]" />
-                    <span>Tu decidi le tue tariffe e la tua disponibilità oraria</span>
+                    <Check className="h-4 w-4 text-[#8EF5DC] shrink-0" />
+                    <span>La documentazione potrà essere richiesta durante la verifica.</span>
                   </div>
                 </div>
 
-                <form
-                  onSubmit={handleCoachSubmit}
-                  className="mt-6 space-y-3.5"
-                >
-                  <div>
-                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                      Nome e Cognome
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={coachFullName}
-                      onChange={(e) => setCoachFullName(e.target.value)}
-                      placeholder="es. Marco Bianchi"
-                      className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-2 text-sm text-[#F4F5F6] placeholder:text-[#525E5C] focus:border-[#8EF5DC] focus:outline-none"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                        Email professionale
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={coachEmail}
-                        onChange={(e) => setCoachEmail(e.target.value)}
-                        placeholder="coach@example.com"
-                        className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-2 text-sm text-[#F4F5F6] placeholder:text-[#525E5C] focus:border-[#8EF5DC] focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                        Disciplina principale
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={coachDiscipline}
-                        onChange={(e) => setCoachDiscipline(e.target.value)}
-                        placeholder="es. Running, Calisthenics..."
-                        className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-2 text-sm text-[#F4F5F6] placeholder:text-[#525E5C] focus:border-[#8EF5DC] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                      Link profilo LinkedIn / Instagram / Certificazioni
-                    </label>
-                    <input
-                      type="text"
-                      value={coachProfileLink}
-                      onChange={(e) => setCoachProfileLink(e.target.value)}
-                      placeholder="https://..."
-                      className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-2 text-sm text-[#F4F5F6] placeholder:text-[#525E5C] focus:border-[#8EF5DC] focus:outline-none"
-                    />
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-3 text-xs text-[#9EABA7]">
-                    La documentazione potrà essere richiesta durante la verifica del profilo. Non è necessario caricare file in questa fase.
-                  </div>
-
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
                   <button
-                    type="submit"
-                    disabled={coachLoading}
-                    className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] py-2.5 text-sm font-semibold text-[#080A0A] hover:bg-[#77eecf] disabled:opacity-50 transition-all min-h-[44px]"
+                    onClick={() => {
+                      onClose();
+                      navigate('/for-coaches');
+                    }}
+                    className="w-full inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] px-5 py-2.5 text-xs font-bold text-[#080A0A] hover:bg-[#7cebcfe8]"
                   >
-                    {coachLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Salvataggio su Firebase...
-                      </>
-                    ) : (
-                      'Invia candidatura coach'
-                    )}
+                    Apri pagina candidatura completa
+                    <ArrowRight className="h-4 w-4" />
                   </button>
-                </form>
+                </div>
               </div>
             ) : (
               <div className="py-8 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#8EF5DC]/20 text-[#8EF5DC]">
                   <Check className="h-6 w-6" />
                 </div>
-                <h4 className="mt-4 text-xl font-bold text-[#F4F5F6]">
-                  Candidatura salvata con successo!
-                </h4>
+                <h4 className="mt-4 text-xl font-bold text-[#F4F5F6]">Candidatura registrata!</h4>
                 <p className="mt-2 text-xs text-[#9EABA7]">
-                  I tuoi dati sono stati registrati su Firebase Firestore. Il team di GROW UP verificherà i titoli e le credenziali entro 48 ore lavorative.
+                  Il team di GROW UP verificherà le credenziali per abilitare il tuo profilo coach.
                 </p>
                 <button
                   onClick={onClose}
@@ -240,7 +195,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         )}
 
         {/* ============================================================ */}
-        {/* 2. ACCEDI (Firebase Authentication)                          */}
+        {/* 2. ACCEDI (Firebase Google Auth)                             */}
         {/* ============================================================ */}
         {type === 'login' && (
           <div>
@@ -259,24 +214,26 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                 </div>
                 <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-[#8EF5DC]/30 bg-[#8EF5DC]/10 px-3 py-1 text-xs font-semibold text-[#8EF5DC]">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  Autenticato su Firebase • {profile?.role === 'admin' ? 'Admin' : profile?.role === 'coach' ? 'Coach' : 'Atleta'}
+                  {effectiveRole === 'admin'
+                    ? 'Amministratore'
+                    : effectiveRole === 'coach'
+                    ? 'Coach Verificato'
+                    : 'Atleta'}
                 </div>
                 <h4 className="mt-3 text-xl font-bold text-[#F4F5F6]">
                   {currentUser.displayName || 'Utente GROW UP'}
                 </h4>
-                <p className="mt-1 text-xs text-[#9EABA7]">
-                  {currentUser.email}
-                </p>
+                <p className="mt-1 text-xs text-[#9EABA7]">{currentUser.email}</p>
 
                 <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
                   <button
                     onClick={() => {
                       onClose();
-                      if (onOpenQuestionnaire) onOpenQuestionnaire();
+                      navigate('/dashboard');
                     }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] px-5 py-2.5 text-xs font-semibold text-[#080A0A] hover:bg-[#77eecf] min-h-[44px]"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] px-5 py-2.5 text-xs font-bold text-[#080A0A] hover:bg-[#7cebcfe8] min-h-[44px]"
                   >
-                    Trova un nuovo coach
+                    Vai alla Dashboard
                     <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                   <button
@@ -293,11 +250,9 @@ export const InfoModals: React.FC<InfoModalProps> = ({
               </div>
             ) : (
               <div>
-                <h3 className="text-2xl font-extrabold text-[#F4F5F6]">
-                  Accedi a GROW UP
-                </h3>
+                <h3 className="text-2xl font-extrabold text-[#F4F5F6]">Accedi a GROW UP</h3>
                 <p className="mt-1 text-xs text-[#9EABA7]">
-                  Entra con il tuo account Firebase per gestire allenamenti, abbinamenti e consulenze.
+                  Accedi con il tuo account Google per gestire prenotazioni, percorsi e profilo.
                 </p>
 
                 {authError && (
@@ -306,11 +261,13 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                   </div>
                 )}
 
-                <div className="mt-5 rounded-xl border border-white/10 bg-[#111A1A] p-3 text-xs text-[#9EABA7]">
-                  Tutti i nuovi account iniziano come Atleta. Per diventare Coach, accedi e invia la candidatura: il ruolo viene attivato solo dopo la verifica GROW UP.
+                <div className="mt-5 rounded-2xl border border-white/10 bg-[#111A1A] p-4 text-xs text-[#9EABA7] leading-relaxed">
+                  Tutti i nuovi utenti iniziano come <strong className="text-[#F4F5F6]">Atleta</strong>.
+                  Se sei un coach, accedi e compila il modulo "Diventa Coach": il ruolo viene
+                  attivato dal team dopo la verifica delle credenziali.
                 </div>
 
-                {/* Google Sign In with Firebase */}
+                {/* Google Sign In */}
                 <div className="mt-6 space-y-3">
                   <button
                     type="button"
@@ -340,25 +297,12 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                         />
                       </svg>
                     )}
-                    <span>Continua con Google (Atleta)</span>
+                    <span>Continua con Google</span>
                   </button>
 
                   <div className="pt-2 text-center text-xs text-[#8E9B98]">
-                    L'autenticazione è gestita in modo sicuro tramite Firebase Auth.
+                    Autenticazione sicura tramite Firebase Authentication.
                   </div>
-                </div>
-
-                <div className="mt-6 text-center text-xs text-[#8E9B98]">
-                  Non hai ancora un account?{' '}
-                  <button
-                    onClick={() => {
-                      onClose();
-                      if (onOpenQuestionnaire) onOpenQuestionnaire();
-                    }}
-                    className="text-[#8EF5DC] font-semibold hover:underline"
-                  >
-                    Trova il tuo coach e registrati
-                  </button>
                 </div>
               </div>
             )}
@@ -366,7 +310,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         )}
 
         {/* ============================================================ */}
-        {/* 3. SCOPRI IL METODO                                          */}
+        {/* 3. METODO                                                    */}
         {/* ============================================================ */}
         {type === 'method' && (
           <div>
@@ -375,34 +319,35 @@ export const InfoModals: React.FC<InfoModalProps> = ({
               IL METODO GROW UP
             </div>
             <h3 className="mt-3 text-2xl font-extrabold text-[#F4F5F6]">
-              Come trasformiamo la tua costanza in risultati
+              Come trasformiamo la costanza in risultati
             </h3>
-            
-            <div className="mt-6 space-y-4 text-sm text-[#9EABA7] leading-relaxed">
-              <div className="rounded-xl border border-white/5 bg-[#111A1A] p-4">
-                <h4 className="font-bold text-[#F4F5F6] flex items-center gap-2">
-                  <span className="text-[#8EF5DC]">1.</span> Analisi di partenza completa
+
+            <div className="mt-5 space-y-3 text-xs text-[#9EABA7] leading-relaxed">
+              <div className="rounded-2xl border border-white/5 bg-[#111A1A] p-4">
+                <h4 className="font-bold text-[#F4F5F6] text-sm">
+                  1. Selezione rigorosa dei professionisti
                 </h4>
-                <p className="mt-1 text-xs text-[#9EABA7]">
-                  Prima di assegnare un solo esercizio, il coach valuta mobilità, postura, abitudini di sonno e ore a sedere per scongiurare infortuni.
+                <p className="mt-1">
+                  Nessun coach accede al catalogo pubblico senza la verifica dei titoli da parte
+                  dell'amministrazione.
                 </p>
               </div>
 
-              <div className="rounded-xl border border-white/5 bg-[#111A1A] p-4">
-                <h4 className="font-bold text-[#F4F5F6] flex items-center gap-2">
-                  <span className="text-[#8EF5DC]">2.</span> Micro-obiettivi settimanali
+              <div className="rounded-2xl border border-white/5 bg-[#111A1A] p-4">
+                <h4 className="font-bold text-[#F4F5F6] text-sm">
+                  2. Libertà di formato: online o di persona
                 </h4>
-                <p className="mt-1 text-xs text-[#9EABA7]">
-                  Nessun sovraccarico irrealistico: la programmazione cresce progressivamente al ritmo del tuo reale adattamento biologico.
+                <p className="mt-1">
+                  Puoi scegliere se allenarti a distanza con programmazione personalizzata o di
+                  persona sul campo.
                 </p>
               </div>
 
-              <div className="rounded-xl border border-white/5 bg-[#111A1A] p-4">
-                <h4 className="font-bold text-[#F4F5F6] flex items-center gap-2">
-                  <span className="text-[#8EF5DC]">3.</span> Feedback visivo e correzione tecnica
-                </h4>
-                <p className="mt-1 text-xs text-[#9EABA7]">
-                  Invia brevi video delle tue esecuzioni direttamente tramite chat protetta e ricevi note vocali e disegni tecnici sulle traiettorie.
+              <div className="rounded-2xl border border-white/5 bg-[#111A1A] p-4">
+                <h4 className="font-bold text-[#F4F5F6] text-sm">3. Trasparenza assoluta</h4>
+                <p className="mt-1">
+                  Confronti tariffe, anni di esperienza e disponibilità oraria prima di richiedere
+                  la sessione.
                 </p>
               </div>
             </div>
@@ -411,11 +356,11 @@ export const InfoModals: React.FC<InfoModalProps> = ({
               <button
                 onClick={() => {
                   onClose();
-                  if (onOpenQuestionnaire) onOpenQuestionnaire();
+                  navigate('/coaches');
                 }}
-                className="rounded-xl bg-[#8EF5DC] px-5 py-2.5 text-xs font-semibold text-[#080A0A] hover:bg-[#77eecf]"
+                className="rounded-xl bg-[#8EF5DC] px-5 py-2.5 text-xs font-bold text-[#080A0A]"
               >
-                Trova il coach per il tuo percorso
+                Esplora i Coach
               </button>
             </div>
           </div>
@@ -428,21 +373,14 @@ export const InfoModals: React.FC<InfoModalProps> = ({
           <div>
             {!contactSubmitted ? (
               <div>
-                <h3 className="text-2xl font-extrabold text-[#F4F5F6]">
-                  Contatta il Team GROW UP
-                </h3>
+                <h3 className="text-2xl font-extrabold text-[#F4F5F6]">Contatta il Team GROW UP</h3>
                 <p className="mt-1 text-xs text-[#9EABA7]">
-                  Hai una domanda specifica o vuoi assistenza nella scelta del coach? Scrivici.
+                  Hai una domanda o ti serve assistenza nella scelta? Scrivici qui.
                 </p>
 
-                <form
-                  onSubmit={handleContactSubmit}
-                  className="mt-5 space-y-3.5"
-                >
+                <form onSubmit={handleContactSubmit} className="mt-5 space-y-3.5">
                   <div>
-                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                      Nome
-                    </label>
+                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">Nome</label>
                     <input
                       type="text"
                       required
@@ -453,9 +391,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                      Email
-                    </label>
+                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">Email</label>
                     <input
                       type="email"
                       required
@@ -487,7 +423,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                     {contactLoading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Invio su Firebase in corso...
+                        Invio messaggio in corso...
                       </>
                     ) : (
                       <>
@@ -503,11 +439,10 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#8EF5DC]/20 text-[#8EF5DC]">
                   <Check className="h-6 w-6" />
                 </div>
-                <h4 className="mt-4 text-xl font-bold text-[#F4F5F6]">
-                  Messaggio registrato!
-                </h4>
+                <h4 className="mt-4 text-xl font-bold text-[#F4F5F6]">Messaggio registrato!</h4>
                 <p className="mt-2 text-xs text-[#9EABA7]">
-                  Il tuo messaggio è stato memorizzato su Firestore. Ti risponderemo all'indirizzo indicato entro poche ore.
+                  Il tuo messaggio è stato memorizzato su Firestore. Ti risponderemo all'indirizzo
+                  indicato entro poche ore.
                 </p>
                 <button
                   onClick={onClose}
@@ -525,30 +460,35 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         {/* ============================================================ */}
         {type === 'privacy' && (
           <div>
-            <h3 className="text-2xl font-extrabold text-[#F4F5F6]">
-              Informativa sulla Privacy
-            </h3>
+            <h3 className="text-2xl font-extrabold text-[#F4F5F6]">Informativa sulla Privacy</h3>
             <div className="mt-4 max-h-[50vh] overflow-y-auto pr-2 space-y-3 text-xs text-[#9EABA7] leading-relaxed">
               <p>
-                La presente Privacy Policy descrive le modalità con cui GROW UP raccoglie, utilizza e protegge i dati personali degli utenti ai sensi del Regolamento Europeo GDPR (UE 2016/679).
+                La presente Privacy Policy descrive le modalità con cui GROW UP raccoglie, utilizza
+                e protegge i dati personali degli utenti ai sensi del Regolamento Europeo GDPR (UE
+                2016/679).
               </p>
               <h5 className="font-bold text-[#F4F5F6]">1. Dati trattati</h5>
               <p>
-                Trattiamo unicamente i dati necessari a finalizzare il match con il coach: sport praticato, obiettivi fitness dichiarati, livello di preparazione e contatti (nome, email).
+                Trattiamo unicamente i dati necessari a finalizzare il match con il coach: sport
+                praticato, obiettivi fitness dichiarati, livello di preparazione e contatti (nome,
+                email).
               </p>
               <h5 className="font-bold text-[#F4F5F6]">2. Finalità del trattamento</h5>
               <p>
-                I dati non vengono ceduti a terze parti commerciali. Vengono condivisi esclusivamente con il coach da te espressamente selezionato per condurre la prima sessione conoscitiva.
+                I dati non vengono ceduti a terze parti commerciali. Vengono condivisi
+                esclusivamente con il coach da te espressamente selezionato per condurre la prima
+                sessione conoscitiva.
               </p>
               <h5 className="font-bold text-[#F4F5F6]">3. Sicurezza e conservazione</h5>
               <p>
-                Adottiamo crittografia avanzata e standard rigorosi per proteggere tutte le comunicazioni.
+                Adottiamo crittografia avanzata e standard rigorosi per proteggere tutte le
+                comunicazioni e le transazioni.
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
               <button
                 onClick={onClose}
-                className="rounded-xl bg-[#8EF5DC] px-5 py-2 text-xs font-semibold text-[#080A0A]"
+                className="rounded-xl bg-[#8EF5DC] px-5 py-2 text-xs font-semibold text-[#080A0A] min-h-[44px]"
               >
                 Ho compreso
               </button>
@@ -561,30 +501,33 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         {/* ============================================================ */}
         {type === 'terms' && (
           <div>
-            <h3 className="text-2xl font-extrabold text-[#F4F5F6]">
-              Termini e Condizioni di Servizio
-            </h3>
+            <h3 className="text-2xl font-extrabold text-[#F4F5F6]">Termini di Servizio</h3>
             <div className="mt-4 max-h-[50vh] overflow-y-auto pr-2 space-y-3 text-xs text-[#9EABA7] leading-relaxed">
               <p>
-                Benvenuto su GROW UP. Utilizzando la nostra piattaforma, accetti i seguenti termini:
+                L'utilizzo della piattaforma GROW UP implica l'accettazione dei seguenti termini e
+                condizioni di servizio.
               </p>
-              <h5 className="font-bold text-[#F4F5F6]">1. Idoneità fisica e certificati medici</h5>
+              <h5 className="font-bold text-[#F4F5F6]">1. Ruolo della Piattaforma</h5>
               <p>
-                Prima di iniziare qualsiasi attività sportiva è obbligatorio disporre di certificato medico sportivo in corso di validità (agonistico o non agonistico).
+                GROW UP opera come intermediario tecnologico e marketplace per facilitare
+                l'incontro tra atleti e coach sportivi autonomi e qualificati.
               </p>
-              <h5 className="font-bold text-[#F4F5F6]">2. Rapporto con il Coach</h5>
+              <h5 className="font-bold text-[#F4F5F6]">2. Verifica Professionale</h5>
               <p>
-                GROW UP verifica le certificazioni iniziali dei coach. Il percorso viene concordato direttamente tra atleta e professionista.
+                Tutti i coach con badge "Verificato" sono stati sottoposti a verifica dei titoli
+                dichiarati dal nostro team amministrativo.
               </p>
-              <h5 className="font-bold text-[#F4F5F6]">3. Trasparenza dei prezzi</h5>
+              <h5 className="font-bold text-[#F4F5F6]">3. Prenotazioni</h5>
               <p>
-                La prima chiamata di orientamento da 15 minuti è sempre gratuita e senza alcun obbligo di rinnovo.
+                Le prenotazioni effettuate sul sito bloccano lo slot orario. Eventuali accordi
+                economici diretti e cancellazioni avvengono secondo i termini concordati con il
+                singolo professionista.
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
               <button
                 onClick={onClose}
-                className="rounded-xl bg-[#8EF5DC] px-5 py-2 text-xs font-semibold text-[#080A0A]"
+                className="rounded-xl bg-[#8EF5DC] px-5 py-2 text-xs font-semibold text-[#080A0A] min-h-[44px]"
               >
                 Accetta e chiudi
               </button>
@@ -593,29 +536,26 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         )}
 
         {/* ============================================================ */}
-        {/* 7. INSTAGRAM POPUP                                           */}
+        {/* 7. INSTAGRAM                                                 */}
+        {/* ============================================================ */}
         {type === 'instagram' && (
           <div className="text-center py-4">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#8EF5DC]/20 text-[#8EF5DC]">
-              <span className="font-bold text-xl">@</span>
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#8EF5DC]/10 text-[#8EF5DC] mb-3">
+              <ExternalLink className="h-7 w-7" />
             </div>
-            <h4 className="mt-4 text-xl font-bold text-[#F4F5F6]">
-              Segui GROW UP su Instagram
-            </h4>
+            <h3 className="text-xl font-bold text-[#F4F5F6]">Seguici su Instagram</h3>
             <p className="mt-2 text-xs text-[#9EABA7] max-w-sm mx-auto">
-              Tips di allenamento, storie di successo e approfondimenti quotidiani con i nostri coach: <strong className="text-[#8EF5DC]">@growup.fit</strong>
+              Trovi tips di allenamento, storie dei nostri coach ed eventi della community su
+              @growup.fitness.
             </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <button
-                onClick={onClose}
-                className="rounded-xl bg-[#8EF5DC] px-5 py-2 text-xs font-semibold text-[#080A0A]"
-              >
-                Chiudi
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="mt-6 rounded-xl bg-[#8EF5DC] px-6 py-2.5 text-xs font-bold text-[#080A0A] min-h-[44px]"
+            >
+              Torna al sito
+            </button>
           </div>
         )}
-
       </div>
     </div>
   );

@@ -1,89 +1,93 @@
 import React, { useState } from 'react';
 import { AuthProvider } from './context/AuthContext';
+import { NavigationProvider, useNavigation } from './context/NavigationContext';
 import { Navbar } from './components/Navbar';
-import { Hero } from './components/Hero';
-import { HowItWorks } from './components/HowItWorks';
-import { ValueSection } from './components/ValueSection';
-import { FinalCta } from './components/FinalCta';
 import { Footer } from './components/Footer';
 import { QuestionnaireModal } from './components/QuestionnaireModal';
 import { InfoModals } from './components/InfoModals';
-import { Dashboard } from './components/Dashboard';
 
-export default function App() {
-  const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState<boolean>(false);
-  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+// Pages
+import { HomePage } from './pages/HomePage';
+import { CoachesPage } from './pages/CoachesPage';
+import { CoachDetailPage } from './pages/CoachDetailPage';
+import { HowItWorksPage } from './pages/HowItWorksPage';
+import { ForCoachesPage } from './pages/ForCoachesPage';
+import { DashboardPage } from './pages/DashboardPage';
+
+const AppContent: React.FC = () => {
+  const { route, isQuestionnaireOpen, closeQuestionnaire, isLoginModalOpen, closeLoginModal } =
+    useNavigation();
   const [activeInfoModal, setActiveInfoModal] = useState<
     'coaches' | 'login' | 'method' | 'contact' | 'privacy' | 'terms' | 'instagram' | null
   >(null);
 
-  const handleOpenQuestionnaire = () => {
-    setActiveInfoModal(null);
-    setIsQuestionnaireOpen(true);
-  };
-
-  const handleScrollToHowItWorks = () => {
-    const el = document.getElementById('come-funziona');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+  // Determine current main view
+  const renderCurrentView = () => {
+    switch (route) {
+      case 'home':
+        return <HomePage />;
+      case 'coaches':
+        return <CoachesPage />;
+      case 'coach-detail':
+        return <CoachDetailPage />;
+      case 'how-it-works':
+        return <HowItWorksPage />;
+      case 'for-coaches':
+        return <ForCoachesPage />;
+      case 'dashboard':
+        return <DashboardPage />;
+      default:
+        return <HomePage />;
     }
   };
 
   return (
-    <AuthProvider>
-      <div className="min-h-screen bg-[#080A0A] text-[#F4F5F6] flex flex-col selection:bg-[#8EF5DC] selection:text-[#080A0A] overflow-x-hidden w-full max-w-full">
-        {/* Navbar with mobile drawer and quick actions */}
-        <Navbar
-          onOpenQuestionnaire={handleOpenQuestionnaire}
-          onOpenForCoaches={() => setActiveInfoModal('coaches')}
-          onOpenLogin={() => setActiveInfoModal('login')}
-          onOpenDashboard={() => setIsDashboardOpen(true)}
-        />
+    <div className="min-h-screen bg-[#080A0A] text-[#F4F5F6] flex flex-col selection:bg-[#8EF5DC] selection:text-[#080A0A] overflow-x-hidden w-full max-w-full">
+      {/* Global Marketplace Navigation */}
+      <Navbar />
 
-        {/* Main Landing Content */}
-        <main className="flex-1 w-full max-w-full overflow-x-hidden">
-          {/* 1. HERO SECTION */}
-          <Hero
-            onOpenQuestionnaire={handleOpenQuestionnaire}
-            onScrollToHowItWorks={handleScrollToHowItWorks}
-          />
+      {/* Main Content Area */}
+      <main className="flex-1 w-full max-w-full overflow-x-hidden">
+        {renderCurrentView()}
+      </main>
 
-          {/* 2. COME FUNZIONA SECTION */}
-          <HowItWorks onOpenQuestionnaire={handleOpenQuestionnaire} />
+      {/* Global Footer */}
+      <Footer
+        onOpenPrivacy={() => setActiveInfoModal('privacy')}
+        onOpenTerms={() => setActiveInfoModal('terms')}
+        onOpenContact={() => setActiveInfoModal('contact')}
+        onOpenInstagram={() => setActiveInfoModal('instagram')}
+      />
 
-          {/* 3. SEZIONE VALORE & STATS */}
-          <ValueSection
-            onOpenMethodDetails={() => setActiveInfoModal('method')}
-            onOpenQuestionnaire={handleOpenQuestionnaire}
-          />
+      {/* Interactive 5-Question Matching Modal */}
+      <QuestionnaireModal
+        isOpen={isQuestionnaireOpen}
+        onClose={closeQuestionnaire}
+      />
 
-          {/* 4. FINAL CALL TO ACTION */}
-          <FinalCta onOpenQuestionnaire={handleOpenQuestionnaire} />
-        </main>
-
-        {/* 5. FOOTER */}
-        <Footer
-          onOpenPrivacy={() => setActiveInfoModal('privacy')}
-          onOpenTerms={() => setActiveInfoModal('terms')}
-          onOpenContact={() => setActiveInfoModal('contact')}
-          onOpenInstagram={() => setActiveInfoModal('instagram')}
-        />
-
-        {/* Interactive 4-Question Matching Modal */}
-        <QuestionnaireModal
-          isOpen={isQuestionnaireOpen}
-          onClose={() => setIsQuestionnaireOpen(false)}
-        />
-
-        {isDashboardOpen && <Dashboard onClose={() => setIsDashboardOpen(false)} />}
-
-        {/* Supporting Information & Action Modals */}
+      {/* Login Modal */}
+      {isLoginModalOpen && (
         <InfoModals
-          type={activeInfoModal}
-          onClose={() => setActiveInfoModal(null)}
-          onOpenQuestionnaire={handleOpenQuestionnaire}
+          type="login"
+          onClose={closeLoginModal}
         />
-      </div>
+      )}
+
+      {/* Supporting Information Modals */}
+      <InfoModals
+        type={activeInfoModal}
+        onClose={() => setActiveInfoModal(null)}
+      />
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <NavigationProvider>
+        <AppContent />
+      </NavigationProvider>
     </AuthProvider>
   );
 }

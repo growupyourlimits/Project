@@ -3,173 +3,40 @@ import {
   X,
   ArrowLeft,
   ArrowRight,
-  CheckCircle2,
   Sparkles,
-  Star,
-  Activity,
-  Calendar,
-  RotateCcw,
   ShieldCheck,
   Check,
+  Calendar,
+  RotateCcw,
   Loader2,
+  Users,
 } from 'lucide-react';
 import {
+  DISCIPLINES,
+  GOALS,
+  LEVELS,
+  MODALITIES,
   QuestionnaireAnswers,
-  SportCategory,
-  FitnessGoal,
-  FitnessLevel,
-  TrainingModality,
-  Coach,
+  CoachProfileEntity,
 } from '../types';
-import { createBooking, listApprovedCoaches, listCoachAvailability, listCoachServices } from '../firebase';
-import { useAuth } from '../context/AuthContext';
+import { listApprovedCoaches } from '../firebase';
+import { useNavigation } from '../context/NavigationContext';
 
 interface QuestionnaireModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const SPORTS: { label: SportCategory; icon: string; desc: string }[] = [
-  { label: 'Corsa', icon: '🏃', desc: 'Dalle prime corse alla mezza maratona' },
-  { label: 'Calisthenics & Fitness', icon: '🤸', desc: 'Padronanza del corpo libero e forza' },
-  { label: 'Palestra & Forza', icon: '🏋️', desc: 'Pesistica, ipertrofia e ricomposizione' },
-  { label: 'Yoga & Mobilità', icon: '🧘', desc: 'Flessibilità, respiro e postura' },
-  { label: 'Ciclismo', icon: '🚴', desc: 'Strada, gravel e programmazione watt' },
-  { label: 'Nuoto', icon: '🏊', desc: 'Resistenza, tecnica e vasca' },
-  { label: 'Altro', icon: '⚡', desc: 'Sport di squadra, arti marziali o misto' },
-];
-
-const GOALS: { label: FitnessGoal; desc: string }[] = [
-  { label: 'Rimettersi in forma', desc: 'Ritrovare costanza, energia e benessere generale' },
-  { label: 'Perdita peso e definizione', desc: 'Definire il fisico senza diete da fame o sovrallenamento' },
-  { label: 'Preparare una gara o evento', desc: 'Tabella specifica per raggiungere un obiettivo cronometrico' },
-  { label: 'Aumento massa muscolare', desc: 'Programma di forza e progressione dei carichi' },
-  { label: 'Salute posturale e longevità', desc: 'Eliminare dolori articolari e migliorare la mobilità' },
-];
-
-const LEVELS: { label: FitnessLevel; desc: string }[] = [
-  { label: 'Principiante (da zero o fermo da molto)', desc: 'Ho bisogno di una guida passo passo per non sbagliare' },
-  { label: 'Intermedio (mi alleno 1-2 volte a settimana)', desc: 'Conosco le basi ma voglio fare un salto di qualità' },
-  { label: 'Avanzato / Atleta (costante, cerco performance)', desc: 'Mi alleno con metodo e cerco ottimizzazione massima' },
-];
-
-const MODALITIES: { label: TrainingModality; desc: string }[] = [
-  { label: 'Online al 100% (videocall e programmazione)', desc: 'Flessibilità totale da casa o dalla tua palestra di fiducia' },
-  { label: 'In presenza (nella mia zona)', desc: 'Sedute one-to-one affiancato sul campo' },
-  { label: 'Ibrido (programma online + check mensile)', desc: 'Il miglior compromesso tra autonomia e supervisione' },
-];
-
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, onClose }) => {
-  const { currentUser } = useAuth();
+  const { navigate } = useNavigation();
+
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [answers, setAnswers] = useState<QuestionnaireAnswers>({});
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [showResults, setShowResults] = useState<boolean>(false);
-  const [selectedCoachForBooking, setSelectedCoachForBooking] = useState<Coach | null>(null);
-  const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
-  const [approvedCoaches, setApprovedCoaches] = useState<Coach[]>([]);
-  const [availableSlots, setAvailableSlots] = useState<{id:string; label:string}[]>([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [coachServices, setCoachServices] = useState<{id:string; title:string; priceCents:number; currency:string}[]>([]);
-  const [selectedServiceId, setSelectedServiceId] = useState('');
-
-  // Booking fields
-  const [athleteName, setAthleteName] = useState<string>('');
-  const [athleteEmail, setAthleteEmail] = useState<string>('');
-  const [preferredSlot, setPreferredSlot] = useState<string>('');
-  const [bookingLoading, setBookingLoading] = useState<boolean>(false);
-
-  // Pre-fill user if authenticated
-  useEffect(() => {
-    if (currentUser) {
-      if (currentUser.displayName && !athleteName) {
-        setAthleteName(currentUser.displayName);
-      }
-      if (currentUser.email && !athleteEmail) {
-        setAthleteEmail(currentUser.email);
-      }
-    }
-  }, [currentUser, isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    listApprovedCoaches()
-      .then((profiles: any[]) => {
-        const coaches: Coach[] = profiles.map((p: any) => {
-          const displayName = p.displayName || 'Coach GROW UP';
-          const searchable = [p.discipline, ...(p.tags || []), ...(p.specialties || []), ...(p.modalities || [])]
-            .join(' ').toLowerCase();
-          let score = 70;
-          if (answers.sport && searchable.includes(answers.sport.toLowerCase())) score += 12;
-          if (answers.goal && searchable.includes(answers.goal.toLowerCase())) score += 8;
-          if (answers.modality && searchable.includes(answers.modality.toLowerCase())) score += 6;
-          return {
-            id: p.coachId || p.id,
-            name: displayName,
-            role: p.headline || p.discipline || 'Coach verificato',
-            badge: 'VERIFICATO',
-            tags: p.tags || [],
-            rating: Number(p.rating || 0),
-            reviewCount: Number(p.reviewCount || 0),
-            matchScore: Math.min(score, 96),
-            bio: p.bio || '',
-            avatarUrl: p.photoURL || '',
-            avatarInitials: displayName.split(/\s+/).slice(0, 2).map((x:string) => x[0]).join('').toUpperCase(),
-            modality: (p.modalities || []).join(' • ') || 'Da concordare',
-            availability: 'Consulta gli orari disponibili',
-            experience: p.experienceYears ? `${p.experienceYears} anni di esperienza` : 'Coach verificato',
-            specialties: p.specialties || [],
-          };
-        });
-        setApprovedCoaches(coaches.sort((a,b) => b.matchScore - a.matchScore));
-      })
-      .catch((err) => {
-        console.error('Errore caricamento coach approvati', err);
-        setApprovedCoaches([]);
-      });
-  }, [isOpen, answers.sport, answers.goal, answers.modality]);
-
-  useEffect(() => {
-    if (!selectedCoachForBooking) {
-      setAvailableSlots([]);
-      setPreferredSlot('');
-      setCoachServices([]);
-      setSelectedServiceId('');
-      return;
-    }
-    setSlotsLoading(true);
-    Promise.all([
-      listCoachAvailability(selectedCoachForBooking.id),
-      listCoachServices(selectedCoachForBooking.id)
-    ])
-      .then(([slots, services]:any[]) => {
-        const serviceList = services.map((s:any) => ({
-          id:s.id, title:s.title || 'Servizio coach', priceCents:Number(s.priceCents || 0), currency:s.currency || 'EUR'
-        }));
-        setCoachServices(serviceList);
-        setSelectedServiceId(serviceList[0]?.id || '');
-        return slots;
-      })
-      .then((slots:any[]) => {
-        const now = Date.now();
-        const formatted = slots
-          .map((slot:any) => {
-            const start = slot.startAt?.toDate ? slot.startAt.toDate() : new Date(slot.startAt);
-            return { id:slot.id, start, label:start.toLocaleString('it-IT', { weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) };
-          })
-          .filter((slot:any) => !Number.isNaN(slot.start.getTime()) && slot.start.getTime() > now)
-          .sort((a:any,b:any) => a.start.getTime() - b.start.getTime())
-          .map(({id,label}:any) => ({id,label}));
-        setAvailableSlots(formatted);
-        setPreferredSlot(formatted[0]?.label || '');
-      })
-      .catch((err) => {
-        console.error('Errore caricamento disponibilità coach', err);
-        setAvailableSlots([]);
-        setPreferredSlot('');
-      })
-      .finally(() => setSlotsLoading(false));
-  }, [selectedCoachForBooking]);
+  const [matchedCoaches, setMatchedCoaches] = useState<
+    { coach: CoachProfileEntity; matchScore: number }[]
+  >([]);
 
   // Close on ESC key
   useEffect(() => {
@@ -191,15 +58,52 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   const handleNextStep = () => {
-    if (currentStep < 4) {
+    if (currentStep < 5) {
       setCurrentStep((prev) => prev + 1);
     } else {
-      // Final step completed -> run matching calculation simulation
+      // Calculate matching against REAL coaches in Firestore
       setIsAnalyzing(true);
-      setTimeout(() => {
-        setIsAnalyzing(false);
-        setShowResults(true);
-      }, 1200);
+      listApprovedCoaches()
+        .then((coaches) => {
+          const scored = coaches.map((coach) => {
+            let score = 65;
+            const searchStr = [
+              coach.discipline,
+              ...(coach.specialties || []),
+              ...(coach.tags || []),
+              ...(coach.goals || []),
+              ...(coach.modalities || []),
+            ]
+              .join(' ')
+              .toLowerCase();
+
+            if (answers.discipline && searchStr.includes(answers.discipline.toLowerCase())) {
+              score += 20;
+            }
+            if (answers.goal && searchStr.includes(answers.goal.toLowerCase())) {
+              score += 10;
+            }
+            if (answers.modality && searchStr.includes(answers.modality.toLowerCase())) {
+              score += 5;
+            }
+            return {
+              coach,
+              matchScore: Math.min(score, 98),
+            };
+          });
+
+          // Sort by match score descending
+          scored.sort((a, b) => b.matchScore - a.matchScore);
+          setMatchedCoaches(scored);
+          setIsAnalyzing(false);
+          setShowResults(true);
+        })
+        .catch((err) => {
+          console.error(err);
+          setIsAnalyzing(false);
+          setShowResults(true);
+          setMatchedCoaches([]);
+        });
     }
   };
 
@@ -213,24 +117,19 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
     setAnswers({});
     setCurrentStep(1);
     setShowResults(false);
-    setSelectedCoachForBooking(null);
-    setBookingSuccess(false);
+    setMatchedCoaches([]);
   };
 
-  const matchedCoaches = approvedCoaches;
+  const progressPercentage = (currentStep / 5) * 100;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="questionnaire-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/85 backdrop-blur-sm"
     >
-      <div
-        id="questionnaire-modal-card"
-        className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0C1212] p-6 sm:p-8 shadow-2xl text-[#F4F5F6] my-auto"
-      >
-        {/* Close button - Min 44x44px touch target */}
+      <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0C1212] p-6 sm:p-8 shadow-2xl text-[#F4F5F6] my-auto">
+        {/* Close Button */}
         <button
           onClick={onClose}
           id="close-questionnaire-btn"
@@ -243,542 +142,333 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
         {/* ============================================================ */}
         {/* STATE 1: ANALYZING SIMULATION                                */}
         {/* ============================================================ */}
-        {isAnalyzing && (
+        {isAnalyzing ? (
           <div className="py-16 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#8EF5DC]/10 border border-[#8EF5DC]/30 text-[#8EF5DC] animate-pulse">
-              <Sparkles className="h-8 w-8" />
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#8EF5DC]/10 text-[#8EF5DC] mb-4">
+              <Loader2 className="h-7 w-7 animate-spin" />
             </div>
-            <h3 className="mt-6 text-2xl font-bold text-[#F4F5F6]">
-              Elaborazione del match in corso...
+            <h3 className="text-xl sm:text-2xl font-bold text-[#F4F5F6]">
+              Confronto con i coach verificati...
             </h3>
-            <p className="mt-2 text-sm text-[#9EABA7]">
-              Stiamo analizzando la disponibilità dei coach certificati in base al tuo profilo.
+            <p className="mt-2 text-xs sm:text-sm text-[#9EABA7] max-w-md mx-auto">
+              Stiamo analizzando la disponibilità e le specializzazioni dei professionisti approvati su
+              GROW UP per trovare le migliori corrispondenze.
             </p>
-            <div className="mt-8 mx-auto max-w-xs h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-[#8EF5DC] rounded-full animate-[progress_1.2s_ease-in-out_infinite]" />
-            </div>
           </div>
-        )}
+        ) : showResults ? (
+          /* ============================================================ */
+          /* STATE 2: RESULTS VIEW                                        */
+          /* ============================================================ */
+          <div className="py-2">
+            <div className="text-center max-w-md mx-auto mb-6">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#8EF5DC]/30 bg-[#8EF5DC]/10 px-3 py-1 text-xs font-semibold text-[#8EF5DC]">
+                <Sparkles className="h-3.5 w-3.5" />
+                MATCH COMPLETATO
+              </span>
+              <h3 className="mt-2 text-2xl font-extrabold text-[#F4F5F6]">
+                Abbiamo trovato {matchedCoaches.length} coach compatibili
+              </h3>
+              <p className="mt-1 text-xs text-[#9EABA7]">
+                Profili verificati e filtrati in base alle tue risposte.
+              </p>
+            </div>
 
-        {/* ============================================================ */}
-        {/* STATE 2: RESULTS SCREEN                                      */}
-        {/* ============================================================ */}
-        {!isAnalyzing && showResults && (
-          <div>
-            {!selectedCoachForBooking ? (
-              <div>
-                {/* Header */}
-                <div className="text-center sm:text-left">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[#8EF5DC]/30 bg-[#8EF5DC]/10 px-3 py-1 text-xs font-semibold text-[#8EF5DC]">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    MATCH COMPLETATO
-                  </div>
-                  <h3
-                    id="questionnaire-title"
-                    className="mt-3 text-2xl sm:text-3xl font-extrabold text-[#F4F5F6]"
+            {matchedCoaches.length > 0 ? (
+              <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+                {matchedCoaches.map(({ coach, matchScore }) => (
+                  <div
+                    key={coach.coachId}
+                    className="rounded-2xl border border-white/10 bg-[#111A1A] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
-                    Abbiamo trovato alcuni coach compatibili.
-                  </h3>
-                  <p className="mt-2 text-sm text-[#9EABA7]">
-                    Ecco i professionisti selezionati in base alle tue risposte ({answers.sport ?? 'Fitness'}, obiettivo {answers.goal ?? 'Personalizzato'}).
-                  </p>
-                </div>
-
-                {/* List of matched coaches */}
-                <div className="mt-6 space-y-4 max-h-[50vh] overflow-y-auto pr-1">
-                  {matchedCoaches.map((coach) => (
-                    <div
-                      key={coach.id}
-                      className="rounded-2xl border border-white/10 bg-[#111A1A] p-5 transition-all hover:border-[#8EF5DC]/40 hover:bg-[#142020]"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3.5">
-                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#1c2e2e] to-[#0d1616] border border-[#8EF5DC]/30 text-[#8EF5DC] font-bold">
-                            {coach.avatarInitials}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-base font-bold text-[#F4F5F6]">
-                                {coach.name}
-                              </h4>
-                              {coach.badge && (
-                                <span className="rounded bg-[#8EF5DC]/15 px-2 py-0.5 text-[10px] font-semibold text-[#8EF5DC]">
-                                  {coach.badge}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-[#8EF5DC] font-medium mt-0.5">
-                              {coach.role}
-                            </p>
-                            <div className="mt-1 flex items-center gap-3 text-xs text-[#8E9B98]">
-                              <span className="flex items-center gap-1 text-[#F4F5F6] font-medium">
-                                <Star className="h-3 w-3 fill-[#8EF5DC] text-[#8EF5DC]" />
-                                {coach.rating}
-                              </span>
-                              <span>•</span>
-                              <span>{coach.experience}</span>
-                              <span>•</span>
-                              <span>{coach.modality}</span>
-                            </div>
-                          </div>
+                    <div className="flex items-center gap-3">
+                      {coach.photoURL ? (
+                        <img
+                          src={coach.photoURL}
+                          alt={coach.displayName}
+                          className="h-14 w-14 rounded-2xl object-cover border border-white/10"
+                        />
+                      ) : (
+                        <div className="h-14 w-14 rounded-2xl bg-[#080A0A] border border-white/10 flex items-center justify-center font-bold text-base text-[#8EF5DC]">
+                          {coach.displayName
+                            .split(' ')
+                            .slice(0, 2)
+                            .map((p) => p[0])
+                            .join('')
+                            .toUpperCase()}
                         </div>
-
-                        <div className="text-right">
-                          <span className="font-mono text-xl font-extrabold text-[#8EF5DC]">
-                            {coach.matchScore}%
-                          </span>
-                          <div className="text-[10px] uppercase text-[#8E9B98]">
-                            Affinità
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="mt-3 text-xs text-[#9EABA7] leading-relaxed">
-                        {coach.bio}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {coach.specialties.map((spec) => (
-                          <span
-                            key={spec}
-                            className="rounded bg-[#080A0A] border border-white/5 px-2 py-0.5 text-[11px] text-[#A6B4B1]"
-                          >
-                            {spec}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-                        <span className="text-xs text-[#8E9B98]">
-                          Disponibilità: <strong className="text-[#F4F5F6] font-normal">{coach.availability}</strong>
-                        </span>
-                        <button
-                          onClick={() => setSelectedCoachForBooking(coach)}
-                          className="rounded-lg bg-[#8EF5DC] px-3.5 py-1.5 text-xs font-semibold text-[#080A0A] hover:bg-[#77eecf] transition-colors"
-                        >
-                          Prenota call gratuita
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Bottom Actions */}
-                <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
-                  <button
-                    onClick={resetQuiz}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#8E9B98] hover:text-[#F4F5F6] transition-colors"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Rifai il questionario
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="rounded-lg border border-white/10 px-4 py-2 text-xs font-semibold text-[#F4F5F6] hover:bg-[#111A1A] transition-colors"
-                  >
-                    Chiudi
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Sub-screen: Book Call with Selected Coach */
-              <div>
-                {!bookingSuccess ? (
-                  <div>
-                    <button
-                      onClick={() => setSelectedCoachForBooking(null)}
-                      className="inline-flex items-center gap-1.5 text-xs text-[#8EF5DC] hover:underline mb-4"
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5" />
-                      Torna all'elenco coach
-                    </button>
-
-                    <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-[#111A1A] p-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#1c2e2e] text-[#8EF5DC] font-bold">
-                        {selectedCoachForBooking.avatarInitials}
-                      </div>
+                      )}
                       <div>
-                        <h4 className="text-base font-bold text-[#F4F5F6]">
-                          Consulenza con {selectedCoachForBooking.name}
-                        </h4>
-                        <p className="text-xs text-[#8EF5DC]">
-                          {selectedCoachForBooking.role} • 15 minuti via Google Meet
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-base text-[#F4F5F6]">
+                            {coach.displayName}
+                          </h4>
+                          <span className="rounded-full bg-[#8EF5DC]/15 px-2 py-0.5 text-[10px] font-bold text-[#8EF5DC]">
+                            {matchScore}% match
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#8EF5DC] mt-0.5">{coach.discipline}</p>
+                        <p className="text-xs text-[#9EABA7] line-clamp-1 mt-1">
+                          {coach.bio || 'Coach sportivo qualificato su GROW UP.'}
                         </p>
                       </div>
                     </div>
 
-                    <form
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        if (!selectedCoachForBooking) return;
-                        setBookingLoading(true);
-                        try {
-                          if (!currentUser) throw new Error('Accedi con Google per confermare una prenotazione.');
-                          const slot = availableSlots.find(s => s.label === preferredSlot);
-                          if (!slot || !selectedServiceId) throw new Error('Seleziona un servizio e un orario disponibili.');
-                          await createBooking({
-                            coachId: selectedCoachForBooking.id,
-                            serviceId: selectedServiceId,
-                            slotId: slot.id,
-                          });
-                          setBookingSuccess(true);
-                        } catch (err) {
-                          console.error(err);
-                          alert('Errore durante il salvataggio della richiesta. Riprova più tardi.');
-                        } finally {
-                          setBookingLoading(false);
-                        }
-                      }}
-                      className="mt-6 space-y-4"
-                    >
-                      <div>
-                        <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                          Il tuo nome e cognome
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={athleteName}
-                          onChange={(e) => setAthleteName(e.target.value)}
-                          placeholder="es. Giulia Rossi"
-                          className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] placeholder:text-[#525E5C] focus:border-[#8EF5DC] focus:outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                          La tua email
-                        </label>
-                        <input
-                          type="email"
-                          required
-                          value={athleteEmail}
-                          onChange={(e) => setAthleteEmail(e.target.value)}
-                          placeholder="giulia.rossi@email.com"
-                          className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] placeholder:text-[#525E5C] focus:border-[#8EF5DC] focus:outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                          Servizio
-                        </label>
-                        {coachServices.length > 0 ? (
-                          <select
-                            required
-                            value={selectedServiceId}
-                            onChange={(e) => setSelectedServiceId(e.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
-                          >
-                            {coachServices.map(service => (
-                              <option key={service.id} value={service.id} className="bg-[#111A1A]">
-                                {service.title} · {(service.priceCents / 100).toLocaleString('it-IT', {style:'currency', currency:service.currency})}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className="rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
-                            Questo coach non ha ancora pubblicato servizi prenotabili.
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-[#9EABA7] mb-1">
-                          Giorno e orario preferito per la call
-                        </label>
-                        {slotsLoading ? (
-                          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
-                            <Loader2 className="h-4 w-4 animate-spin" /> Caricamento disponibilità...
-                          </div>
-                        ) : availableSlots.length > 0 ? (
-                          <select
-                            required
-                            value={preferredSlot}
-                            onChange={(e) => setPreferredSlot(e.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
-                          >
-                            {availableSlots.map(slot => <option key={slot.id} value={slot.label} className="bg-[#111A1A]">{slot.label}</option>)}
-                          </select>
-                        ) : (
-                          <div className="rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
-                            Questo coach non ha ancora pubblicato disponibilità.
-                          </div>
-                        )}
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={bookingLoading || slotsLoading || availableSlots.length === 0 || coachServices.length === 0 || !currentUser}
-                        className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] py-3 text-sm font-semibold text-[#080A0A] hover:bg-[#77eecf] disabled:opacity-50 transition-all min-h-[44px]"
-                      >
-                        {bookingLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Salvataggio su Firebase...
-                          </>
-                        ) : (
-                          <>
-                            <Calendar className="h-4 w-4" />
-                            Conferma prenotazione
-                          </>
-                        )}
-                      </button>
-
-                      <p className="text-center text-[11px] text-[#8E9B98]">
-                        Il pagamento non è ancora attivo: la prenotazione viene registrata con stato non pagato. Devi essere autenticato per confermare.
-                      </p>
-                    </form>
-                  </div>
-                ) : (
-                  <div className="py-8 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#8EF5DC]/15 text-[#8EF5DC]">
-                      <Check className="h-7 w-7" />
-                    </div>
-                    <h4 className="mt-4 text-2xl font-bold text-[#F4F5F6]">
-                      Prenotazione registrata!
-                    </h4>
-                    <p className="mt-2 text-sm text-[#9EABA7] max-w-md mx-auto">
-                      Abbiamo riservato lo slot con {selectedCoachForBooking.name}. La prenotazione è ora visibile nelle dashboard atleta e coach.
-                    </p>
                     <button
-                      onClick={onClose}
-                      className="mt-6 rounded-xl bg-[#8EF5DC] px-6 py-2.5 text-sm font-semibold text-[#080A0A] hover:bg-[#77eecf] min-h-[44px]"
+                      onClick={() => {
+                        onClose();
+                        navigate(`/coaches/${coach.coachId}`);
+                      }}
+                      className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl bg-[#8EF5DC] px-4 py-2 text-xs font-bold text-[#080A0A] hover:bg-[#7cebcfe8] shrink-0"
                     >
-                      Torna alla home
+                      Vedi profilo & prenota
+                      <ArrowRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                )}
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-[#111A1A] p-8 text-center">
+                <Users className="h-8 w-8 text-[#9EABA7] mx-auto mb-2" />
+                <h4 className="font-bold text-base text-[#F4F5F6]">
+                  Nessun coach trovato per questi parametri
+                </h4>
+                <p className="mt-1 text-xs text-[#9EABA7]">
+                  Prova a selezionare una disciplina diversa o consulta il catalogo generale.
+                </p>
+                <button
+                  onClick={() => {
+                    onClose();
+                    navigate('/coaches');
+                  }}
+                  className="mt-4 inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-[#8EF5DC] px-4 py-2 text-xs font-bold text-[#080A0A]"
+                >
+                  Esplora tutti i coach
+                </button>
               </div>
             )}
-          </div>
-        )}
 
-        {/* ============================================================ */}
-        {/* STATE 3: STEP-BY-STEP QUESTIONNAIRE (1 TO 4)                 */}
-        {/* ============================================================ */}
-        {!isAnalyzing && !showResults && (
+            <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+              <button
+                onClick={resetQuiz}
+                className="inline-flex items-center gap-1.5 text-xs text-[#9EABA7] hover:text-[#F4F5F6]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Rifai il questionario
+              </button>
+              <button
+                onClick={onClose}
+                className="inline-flex min-h-[40px] items-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-[#F4F5F6]"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ============================================================ */
+          /* STATE 3: STEP-BY-STEP QUESTIONNAIRE (1 TO 5)                 */
+          /* ============================================================ */
           <div>
-            {/* Progress Header */}
+            {/* Step & Progress Bar */}
             <div className="mb-6">
-              <div className="flex items-center justify-between text-xs text-[#8E9B98] mb-2">
-                <span className="font-semibold text-[#8EF5DC] uppercase tracking-wider">
-                  Domanda {currentStep} di 4
-                </span>
-                <span>{currentStep * 25}% completato</span>
+              <div className="flex items-center justify-between text-xs text-[#9EABA7] mb-2">
+                <span className="font-semibold text-[#8EF5DC]">DOMANDA {currentStep} DI 5</span>
+                <span>{Math.round(progressPercentage)}% completato</span>
               </div>
-              {/* Progress Bar */}
-              <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-1.5 w-full rounded-full bg-[#111A1A] overflow-hidden">
                 <div
                   className="h-full bg-[#8EF5DC] transition-all duration-300 rounded-full"
-                  style={{ width: `${currentStep * 25}%` }}
+                  style={{ width: `${progressPercentage}%` }}
                 />
               </div>
             </div>
 
-            {/* Step 1: Sport / Disciplina */}
+            {/* STEP 1: OBIETTIVO */}
             {currentStep === 1 && (
               <div>
-                <h3
-                  id="questionnaire-title"
-                  className="text-2xl font-extrabold text-[#F4F5F6]"
-                >
-                  Quale disciplina vuoi praticare?
+                <h3 className="text-xl sm:text-2xl font-extrabold text-[#F4F5F6]">
+                  Qual è il tuo obiettivo principale?
                 </h3>
-                <p className="mt-1 text-sm text-[#9EABA7]">
-                  Seleziona l'attività principale su cui vuoi concentrarti.
+                <p className="mt-1 text-xs text-[#9EABA7]">
+                  Seleziona il traguardo che desideri raggiungere con il tuo coach.
                 </p>
 
-                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[46vh] overflow-y-auto pr-1">
-                  {SPORTS.map((sport) => {
-                    const isSelected = answers.sport === sport.label;
-                    return (
-                      <button
-                        key={sport.label}
-                        type="button"
-                        onClick={() => setAnswers({ ...answers, sport: sport.label })}
-                        className={`group flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-                          isSelected
-                            ? 'border-[#8EF5DC] bg-[#142624] text-[#F4F5F6]'
-                            : 'border-white/10 bg-[#111A1A] hover:border-white/20 hover:bg-[#142020]'
-                        }`}
-                      >
-                        <span className="text-2xl flex-shrink-0">{sport.icon}</span>
-                        <div>
-                          <div className="text-sm font-semibold text-[#F4F5F6] group-hover:text-[#8EF5DC] transition-colors">
-                            {sport.label}
-                          </div>
-                          <div className="text-xs text-[#8E9B98] mt-0.5">
-                            {sport.desc}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="mt-5 space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                  {GOALS.map((goal) => (
+                    <button
+                      key={goal}
+                      type="button"
+                      onClick={() => setAnswers((prev) => ({ ...prev, goal }))}
+                      className={`w-full flex items-center justify-between p-3.5 rounded-xl border text-left text-xs sm:text-sm font-medium transition-all ${
+                        answers.goal === goal
+                          ? 'border-[#8EF5DC] bg-[#8EF5DC]/10 text-[#F4F5F6]'
+                          : 'border-white/10 bg-[#111A1A] text-[#9EABA7] hover:border-white/20 hover:text-[#F4F5F6]'
+                      }`}
+                    >
+                      <span>{goal}</span>
+                      {answers.goal === goal && <Check className="h-4 w-4 text-[#8EF5DC]" />}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Step 2: Obiettivo principale */}
+            {/* STEP 2: DISCIPLINA */}
             {currentStep === 2 && (
               <div>
-                <h3
-                  id="questionnaire-title"
-                  className="text-2xl font-extrabold text-[#F4F5F6]"
-                >
-                  Qual è il tuo obiettivo primario?
+                <h3 className="text-xl sm:text-2xl font-extrabold text-[#F4F5F6]">
+                  Quale disciplina ti interessa?
                 </h3>
-                <p className="mt-1 text-sm text-[#9EABA7]">
-                  Ci aiuta a scegliere il coach con la metodologia più efficace.
+                <p className="mt-1 text-xs text-[#9EABA7]">
+                  Scegli lo sport o l'attività che vuoi praticare.
                 </p>
 
-                <div className="mt-6 space-y-3 max-h-[46vh] overflow-y-auto pr-1">
-                  {GOALS.map((goal) => {
-                    const isSelected = answers.goal === goal.label;
-                    return (
-                      <button
-                        key={goal.label}
-                        type="button"
-                        onClick={() => setAnswers({ ...answers, goal: goal.label })}
-                        className={`w-full flex items-start justify-between rounded-2xl border p-4 text-left transition-all ${
-                          isSelected
-                            ? 'border-[#8EF5DC] bg-[#142624]'
-                            : 'border-white/10 bg-[#111A1A] hover:border-white/20 hover:bg-[#142020]'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-sm font-semibold text-[#F4F5F6]">
-                            {goal.label}
-                          </div>
-                          <div className="text-xs text-[#8E9B98] mt-0.5">
-                            {goal.desc}
-                          </div>
-                        </div>
-                        <div
-                          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${
-                            isSelected
-                              ? 'border-[#8EF5DC] bg-[#8EF5DC] text-[#080A0A]'
-                              : 'border-white/20'
-                          }`}
-                        >
-                          {isSelected && <Check className="h-3.5 w-3.5" />}
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[45vh] overflow-y-auto pr-1">
+                  {DISCIPLINES.map((disc) => (
+                    <button
+                      key={disc}
+                      type="button"
+                      onClick={() => setAnswers((prev) => ({ ...prev, discipline: disc }))}
+                      className={`flex items-center justify-between p-3 rounded-xl border text-left text-xs font-medium transition-all ${
+                        answers.discipline === disc
+                          ? 'border-[#8EF5DC] bg-[#8EF5DC]/10 text-[#F4F5F6]'
+                          : 'border-white/10 bg-[#111A1A] text-[#9EABA7] hover:border-white/20 hover:text-[#F4F5F6]'
+                      }`}
+                    >
+                      <span className="truncate">{disc}</span>
+                      {answers.discipline === disc && <Check className="h-3.5 w-3.5 text-[#8EF5DC] shrink-0" />}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Step 3: Livello attuale */}
+            {/* STEP 3: LIVELLO */}
             {currentStep === 3 && (
               <div>
-                <h3
-                  id="questionnaire-title"
-                  className="text-2xl font-extrabold text-[#F4F5F6]"
-                >
+                <h3 className="text-xl sm:text-2xl font-extrabold text-[#F4F5F6]">
                   Qual è il tuo livello di partenza?
                 </h3>
-                <p className="mt-1 text-sm text-[#9EABA7]">
-                  Serve per calibrare i volumi e la complessità iniziale.
+                <p className="mt-1 text-xs text-[#9EABA7]">
+                  Questo aiuta il coach a strutturare la corretta progressione dei carichi.
                 </p>
 
-                <div className="mt-6 space-y-3 max-h-[46vh] overflow-y-auto pr-1">
-                  {LEVELS.map((level) => {
-                    const isSelected = answers.level === level.label;
-                    return (
-                      <button
-                        key={level.label}
-                        type="button"
-                        onClick={() => setAnswers({ ...answers, level: level.label })}
-                        className={`w-full flex items-start justify-between rounded-2xl border p-4 text-left transition-all ${
-                          isSelected
-                            ? 'border-[#8EF5DC] bg-[#142624]'
-                            : 'border-white/10 bg-[#111A1A] hover:border-white/20 hover:bg-[#142020]'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-sm font-semibold text-[#F4F5F6]">
-                            {level.label}
-                          </div>
-                          <div className="text-xs text-[#8E9B98] mt-0.5">
-                            {level.desc}
-                          </div>
+                <div className="mt-5 space-y-2.5">
+                  {LEVELS.map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => setAnswers((prev) => ({ ...prev, level: lvl }))}
+                      className={`w-full flex items-center justify-between p-4 rounded-xl border text-left text-sm font-medium transition-all ${
+                        answers.level === lvl
+                          ? 'border-[#8EF5DC] bg-[#8EF5DC]/10 text-[#F4F5F6]'
+                          : 'border-white/10 bg-[#111A1A] text-[#9EABA7] hover:border-white/20 hover:text-[#F4F5F6]'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-[#F4F5F6]">{lvl}</div>
+                        <div className="text-xs text-[#9EABA7] mt-0.5">
+                          {lvl === 'Principiante'
+                            ? 'Da zero o fermo da molto tempo, cerco guida passo-passo.'
+                            : lvl === 'Intermedio'
+                            ? 'Mi alleno con costanza e conosco i fondamentali.'
+                            : 'Atleta o avanzato, cerco massima performance e dettagli tecnici.'}
                         </div>
-                        <div
-                          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${
-                            isSelected
-                              ? 'border-[#8EF5DC] bg-[#8EF5DC] text-[#080A0A]'
-                              : 'border-white/20'
-                          }`}
-                        >
-                          {isSelected && <Check className="h-3.5 w-3.5" />}
-                        </div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                      {answers.level === lvl && <Check className="h-4 w-4 text-[#8EF5DC]" />}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Step 4: Modalità preferita */}
+            {/* STEP 4: MODALITÀ */}
             {currentStep === 4 && (
               <div>
-                <h3
-                  id="questionnaire-title"
-                  className="text-2xl font-extrabold text-[#F4F5F6]"
-                >
+                <h3 className="text-xl sm:text-2xl font-extrabold text-[#F4F5F6]">
                   Come preferisci allenarti?
                 </h3>
-                <p className="mt-1 text-sm text-[#9EABA7]">
-                  Scegli la modalità che si inserisce meglio nelle tue giornate.
+                <p className="mt-1 text-xs text-[#9EABA7]">
+                  Scegli se preferisci il supporto remoto o di persona.
                 </p>
 
-                <div className="mt-6 space-y-3 max-h-[46vh] overflow-y-auto pr-1">
-                  {MODALITIES.map((modality) => {
-                    const isSelected = answers.modality === modality.label;
-                    return (
-                      <button
-                        key={modality.label}
-                        type="button"
-                        onClick={() => setAnswers({ ...answers, modality: modality.label })}
-                        className={`w-full flex items-start justify-between rounded-2xl border p-4 text-left transition-all ${
-                          isSelected
-                            ? 'border-[#8EF5DC] bg-[#142624]'
-                            : 'border-white/10 bg-[#111A1A] hover:border-white/20 hover:bg-[#142020]'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-sm font-semibold text-[#F4F5F6]">
-                            {modality.label}
-                          </div>
-                          <div className="text-xs text-[#8E9B98] mt-0.5">
-                            {modality.desc}
-                          </div>
+                <div className="mt-5 space-y-2.5">
+                  {MODALITIES.map((mod) => (
+                    <button
+                      key={mod}
+                      type="button"
+                      onClick={() => setAnswers((prev) => ({ ...prev, modality: mod }))}
+                      className={`w-full flex items-center justify-between p-4 rounded-xl border text-left text-sm font-medium transition-all ${
+                        answers.modality === mod
+                          ? 'border-[#8EF5DC] bg-[#8EF5DC]/10 text-[#F4F5F6]'
+                          : 'border-white/10 bg-[#111A1A] text-[#9EABA7] hover:border-white/20 hover:text-[#F4F5F6]'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-[#F4F5F6]">{mod}</div>
+                        <div className="text-xs text-[#9EABA7] mt-0.5">
+                          {mod === 'Online'
+                            ? 'Massima flessibilità ovunque tu sia con schede e check periodici.'
+                            : mod === 'In presenza'
+                            ? 'Affiancamento diretto in palestra, campo o parco.'
+                            : 'Mix equilibrato tra programmazione online e check dal vivo.'}
                         </div>
-                        <div
-                          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${
-                            isSelected
-                              ? 'border-[#8EF5DC] bg-[#8EF5DC] text-[#080A0A]'
-                              : 'border-white/20'
-                          }`}
-                        >
-                          {isSelected && <Check className="h-3.5 w-3.5" />}
-                        </div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                      {answers.modality === mod && <Check className="h-4 w-4 text-[#8EF5DC]" />}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Navigation Buttons */}
+            {/* STEP 5: FREQUENZA & NOTE */}
+            {currentStep === 5 && (
+              <div>
+                <h3 className="text-xl sm:text-2xl font-extrabold text-[#F4F5F6]">
+                  Quante volte vuoi allenarti a settimana?
+                </h3>
+                <p className="mt-1 text-xs text-[#9EABA7]">
+                  Definisci la frequenza ideale per il tuo calendario.
+                </p>
+
+                <div className="mt-5 grid grid-cols-3 gap-2.5">
+                  {['1-2 volte', '3-4 volte', '5+ volte'].map((freq) => (
+                    <button
+                      key={freq}
+                      type="button"
+                      onClick={() => setAnswers((prev) => ({ ...prev, frequency: freq }))}
+                      className={`p-3 rounded-xl border text-center text-xs font-semibold transition-all ${
+                        answers.frequency === freq
+                          ? 'border-[#8EF5DC] bg-[#8EF5DC]/10 text-[#8EF5DC]'
+                          : 'border-white/10 bg-[#111A1A] text-[#9EABA7] hover:border-white/20 hover:text-[#F4F5F6]'
+                      }`}
+                    >
+                      {freq}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-6">
+                  <label className="block text-xs font-semibold text-[#9EABA7] mb-1.5">
+                    Eventuali preferenze aggiuntive o limitazioni fisiche (opzionale)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={answers.notes || ''}
+                    onChange={(e) => setAnswers((prev) => ({ ...prev, notes: e.target.value }))}
+                    placeholder="es. Ho un vecchio dolore alla spalla, preferisco orari serali..."
+                    className="w-full rounded-xl border border-white/10 bg-[#111A1A] p-3 text-xs text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none resize-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Step Navigation */}
             <div className="mt-8 pt-5 border-t border-white/10 flex items-center justify-between">
               {currentStep > 1 ? (
                 <button
                   type="button"
                   onClick={handlePrevStep}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/10 px-5 py-2.5 text-xs sm:text-sm font-semibold text-[#9EABA7] hover:text-[#F4F5F6] hover:bg-[#111A1A] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8EF5DC]"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 text-xs font-medium text-[#9EABA7] hover:text-[#F4F5F6] transition-colors"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Indietro
@@ -790,15 +480,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
               <button
                 type="button"
                 onClick={handleNextStep}
-                disabled={
-                  (currentStep === 1 && !answers.sport) ||
-                  (currentStep === 2 && !answers.goal) ||
-                  (currentStep === 3 && !answers.level) ||
-                  (currentStep === 4 && !answers.modality)
-                }
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#8EF5DC] px-6 py-2.5 text-xs sm:text-sm font-semibold text-[#080A0A] hover:bg-[#7cebcfe8] disabled:opacity-40 disabled:pointer-events-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white active:scale-[0.98]"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] px-6 py-2.5 text-xs font-bold text-[#080A0A] hover:bg-[#7cebcfe8] transition-all"
               >
-                {currentStep === 4 ? 'Trova i miei match' : 'Continua'}
+                {currentStep === 5 ? 'Calcola i coach compatibili' : 'Continua'}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>

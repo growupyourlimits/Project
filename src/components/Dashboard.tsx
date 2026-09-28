@@ -1,29 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { X, ShieldCheck, UserRound, CalendarDays, Plus, Check, Ban } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { createAvailabilitySlot, createCoachService, listMyBookings, listPendingCoachApplications, reviewCoachApplication, saveCoachProfile, getCoachDocumentUrl } from '../firebase';
+import React from 'react';
+import { DashboardPage } from '../pages/DashboardPage';
 
-export const Dashboard:React.FC<{onClose:()=>void}>=({onClose})=>{
- const {currentUser,profile,isAdmin,isCoach}=useAuth();
- const [items,setItems]=useState<any[]>([]); const [msg,setMsg]=useState('');
- const [title,setTitle]=useState('Sessione individuale'); const [price,setPrice]=useState('50');
- const [start,setStart]=useState(''); const [end,setEnd]=useState('');
- const [bio,setBio]=useState(''); const [discipline,setDiscipline]=useState('');
- const load=async()=>{if(!currentUser)return; setItems(isAdmin?await listPendingCoachApplications():await listMyBookings(currentUser.uid,profile?.role||'athlete'));};
- useEffect(()=>{load().catch(console.error)},[currentUser?.uid,isAdmin,profile?.role]);
- if(!currentUser)return null;
- const saveProfile=async()=>{await saveCoachProfile({displayName:profile?.displayName||currentUser.displayName||'Coach',headline:discipline,bio,discipline,tags:discipline?[discipline]:[],modalities:['Online'],experienceYears:0,specialties:discipline?[discipline]:[],photoURL:currentUser.photoURL||''});setMsg('Profilo coach aggiornato.');};
- return <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/85 p-4 backdrop-blur-sm">
-  <div className="mx-auto my-8 max-w-5xl rounded-3xl border border-white/10 bg-[#0C1212] p-6 text-[#F4F5F6]">
-   <div className="flex items-start justify-between"><div><p className="text-xs font-bold text-[#8EF5DC]">GROW UP AREA RISERVATA</p><h2 className="mt-1 text-2xl font-extrabold">{isAdmin?'Dashboard Admin':isCoach?'Dashboard Coach':'Dashboard Atleta'}</h2><p className="mt-1 text-sm text-[#9EABA7]">{currentUser.email}</p></div><button onClick={onClose} className="rounded-xl border border-white/10 p-3"><X/></button></div>
-   {msg&&<div className="mt-5 rounded-xl border border-[#8EF5DC]/30 bg-[#8EF5DC]/10 p-3 text-sm text-[#8EF5DC]">{msg}</div>}
-   {isAdmin&&<section className="mt-7"><h3 className="flex items-center gap-2 font-bold"><ShieldCheck className="text-[#8EF5DC]"/>Candidature da verificare</h3><div className="mt-3 space-y-3">{items.length===0&&<p className="text-sm text-[#9EABA7]">Nessuna candidatura in attesa.</p>}{items.map(a=><div key={a.id} className="rounded-2xl border border-white/10 bg-[#111A1A] p-4"><div className="font-bold">{a.fullName}</div><div className="text-sm text-[#9EABA7]">{a.email} · {a.discipline} · {a.experienceYears||0} anni</div><p className="mt-2 text-sm">{a.bio}</p>
-<div className="mt-3 flex flex-wrap gap-2">{(a.documentPaths || []).map((path:string, i:number)=><button key={path} onClick={async()=>{const url=await getCoachDocumentUrl(path); window.open(url,'_blank','noopener,noreferrer');}} className="rounded-lg border border-white/10 px-3 py-2 text-xs">Documento {i+1}</button>)}</div>
-<div className="mt-3 flex gap-2"><button onClick={async()=>{await reviewCoachApplication(a.id,a.applicantId,true);await load();}} className="flex items-center gap-1 rounded-lg bg-[#8EF5DC] px-3 py-2 text-xs font-bold text-black"><Check size={15}/>Approva</button><button onClick={async()=>{await reviewCoachApplication(a.id,a.applicantId,false,'Candidatura non approvata');await load();}} className="flex items-center gap-1 rounded-lg border border-red-400/30 px-3 py-2 text-xs"><Ban size={15}/>Rifiuta</button></div></div>)}</div></section>}
-   {isCoach&&<><section className="mt-7 grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-white/10 p-4"><h3 className="flex gap-2 font-bold"><UserRound/>Profilo pubblico</h3><input value={discipline} onChange={e=>setDiscipline(e.target.value)} placeholder="Disciplina / headline" className="mt-3 w-full rounded-xl bg-[#111A1A] p-3"/><textarea value={bio} onChange={e=>setBio(e.target.value)} placeholder="Bio professionale" className="mt-2 min-h-28 w-full rounded-xl bg-[#111A1A] p-3"/><button onClick={saveProfile} className="mt-2 rounded-xl bg-[#8EF5DC] px-4 py-2 text-sm font-bold text-black">Salva profilo</button></div>
-   <div className="rounded-2xl border border-white/10 p-4"><h3 className="flex gap-2 font-bold"><Plus/>Nuovo servizio</h3><input value={title} onChange={e=>setTitle(e.target.value)} className="mt-3 w-full rounded-xl bg-[#111A1A] p-3"/><input type="number" value={price} onChange={e=>setPrice(e.target.value)} className="mt-2 w-full rounded-xl bg-[#111A1A] p-3" placeholder="Prezzo €"/><button onClick={async()=>{await createCoachService({title,description:'',type:'single_session',durationMinutes:60,priceCents:Math.round(Number(price)*100)});setMsg('Servizio creato.');}} className="mt-2 rounded-xl bg-[#8EF5DC] px-4 py-2 text-sm font-bold text-black">Crea servizio</button></div></section>
-   <section className="mt-4 rounded-2xl border border-white/10 p-4"><h3 className="flex gap-2 font-bold"><CalendarDays/>Disponibilità</h3><div className="mt-3 flex flex-wrap gap-2"><input type="datetime-local" value={start} onChange={e=>setStart(e.target.value)} className="rounded-xl bg-[#111A1A] p-3"/><input type="datetime-local" value={end} onChange={e=>setEnd(e.target.value)} className="rounded-xl bg-[#111A1A] p-3"/><button onClick={async()=>{await createAvailabilitySlot(new Date(start),new Date(end));setMsg('Disponibilità aggiunta.');}} className="rounded-xl bg-[#8EF5DC] px-4 py-2 text-sm font-bold text-black">Aggiungi slot</button></div></section></>}
-   {!isAdmin&&<section className="mt-7"><h3 className="font-bold">Prenotazioni</h3><div className="mt-3 space-y-2">{items.length===0?<p className="text-sm text-[#9EABA7]">Nessuna prenotazione presente.</p>:items.map(b=><div key={b.id} className="rounded-xl border border-white/10 p-3 text-sm">{b.status} · pagamento {b.paymentStatus}</div>)}</div></section>}
-  </div>
- </div>
-}
+export const Dashboard: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
+  return (
+    <div className="relative">
+      <DashboardPage />
+    </div>
+  );
+};
