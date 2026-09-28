@@ -21,8 +21,7 @@ import {
   TrainingModality,
   Coach,
 } from '../types';
-import { getFilteredCoaches } from '../data/coaches';
-import { submitConsultationRequest } from '../firebase';
+import { listApprovedCoaches, submitConsultationRequest } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
 interface QuestionnaireModalProps {
@@ -68,6 +67,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
   const [showResults, setShowResults] = useState<boolean>(false);
   const [selectedCoachForBooking, setSelectedCoachForBooking] = useState<Coach | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
+  const [approvedCoaches, setApprovedCoaches] = useState<Coach[]>([]);
 
   // Booking fields
   const [athleteName, setAthleteName] = useState<string>('');
@@ -86,6 +86,44 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
       }
     }
   }, [currentUser, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    listApprovedCoaches()
+      .then((profiles: any[]) => {
+        const coaches: Coach[] = profiles.map((p: any) => {
+          const displayName = p.displayName || 'Coach GROW UP';
+          const searchable = [p.discipline, ...(p.tags || []), ...(p.specialties || []), ...(p.modalities || [])]
+            .join(' ').toLowerCase();
+          let score = 70;
+          if (answers.sport && searchable.includes(answers.sport.toLowerCase())) score += 12;
+          if (answers.goal && searchable.includes(answers.goal.toLowerCase())) score += 8;
+          if (answers.modality && searchable.includes(answers.modality.toLowerCase())) score += 6;
+          return {
+            id: p.coachId || p.id,
+            name: displayName,
+            role: p.headline || p.discipline || 'Coach verificato',
+            badge: 'VERIFICATO',
+            tags: p.tags || [],
+            rating: Number(p.rating || 0),
+            reviewCount: Number(p.reviewCount || 0),
+            matchScore: Math.min(score, 96),
+            bio: p.bio || '',
+            avatarUrl: p.photoURL || '',
+            avatarInitials: displayName.split(/\s+/).slice(0, 2).map((x:string) => x[0]).join('').toUpperCase(),
+            modality: (p.modalities || []).join(' • ') || 'Da concordare',
+            availability: 'Consulta gli orari disponibili',
+            experience: p.experienceYears ? `${p.experienceYears} anni di esperienza` : 'Coach verificato',
+            specialties: p.specialties || [],
+          };
+        });
+        setApprovedCoaches(coaches.sort((a,b) => b.matchScore - a.matchScore));
+      })
+      .catch((err) => {
+        console.error('Errore caricamento coach approvati', err);
+        setApprovedCoaches([]);
+      });
+  }, [isOpen, answers.sport, answers.goal, answers.modality]);
 
   // Close on ESC key
   useEffect(() => {
@@ -133,7 +171,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
     setBookingSuccess(false);
   };
 
-  const matchedCoaches = getFilteredCoaches(answers);
+  const matchedCoaches = approvedCoaches;
 
   return (
     <div
