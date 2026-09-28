@@ -150,7 +150,6 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
         setSelectedServiceId(serviceList[0]?.id || '');
         return slots;
       })
-      .then((slots:any[]) =>
       .then((slots:any[]) => {
         const now = Date.now();
         const formatted = slots
