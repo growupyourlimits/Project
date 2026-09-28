@@ -25,7 +25,6 @@ export const InfoModals: React.FC<InfoModalProps> = ({
   const [coachSubmitted, setCoachSubmitted] = useState(false);
 
   // Login form state
-  const [loginRole, setLoginRole] = useState<'athlete' | 'coach'>('athlete');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -40,6 +39,10 @@ export const InfoModals: React.FC<InfoModalProps> = ({
 
   const handleCoachSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      setAuthError('Accedi con Google prima di inviare la candidatura coach.');
+      return;
+    }
     setCoachLoading(true);
     try {
       await submitCoachApplication({
@@ -61,7 +64,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
     setAuthLoading(true);
     setAuthError(null);
     try {
-      await signInWithGoogle(loginRole);
+      await signInWithGoogle();
     } catch (err) {
       console.error(err);
       setAuthError('Accesso non riuscito. Verifica la connessione e riprova.');
@@ -253,7 +256,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                 </div>
                 <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-[#8EF5DC]/30 bg-[#8EF5DC]/10 px-3 py-1 text-xs font-semibold text-[#8EF5DC]">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  Autenticato su Firebase • {profile?.role === 'coach' ? 'Coach' : 'Atleta'}
+                  Autenticato su Firebase • {profile?.role === 'admin' ? 'Admin' : profile?.role === 'coach' ? 'Coach' : 'Atleta'}
                 </div>
                 <h4 className="mt-3 text-xl font-bold text-[#F4F5F6]">
                   {currentUser.displayName || 'Utente GROW UP'}
@@ -361,7 +364,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                         />
                       </svg>
                     )}
-                    <span>Continua con Google ({loginRole === 'athlete' ? 'Atleta' : 'Coach'})</span>
+                    <span>Continua con Google (Atleta)</span>
                   </button>
 
                   <div className="pt-2 text-center text-xs text-[#8E9B98]">
