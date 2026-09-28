@@ -35,7 +35,10 @@ service cloud.firestore {
     match /coachServices/{id} {
       allow read: if resource.data.active == true || admin() || (signedIn() && resource.data.coachId == request.auth.uid);
       allow create: if coach() && request.resource.data.coachId == request.auth.uid;
-      allow update, delete: if admin() || (coach() && resource.data.coachId == request.auth.uid && request.resource.data.coachId == resource.data.coachId);
+      allow update, delete: if admin() || (coach() && resource.data.coachId == request.auth.uid &&
+        request.resource.data.coachId == resource.data.coachId) ||
+        (signedIn() && resource.data.status == 'available' && resource.data.coachId == request.resource.data.coachId &&
+        request.resource.data.status == 'reserved' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','bookingId','updatedAt']));
     }
 
     match /coachAvailability/{id} {
@@ -45,7 +48,9 @@ service cloud.firestore {
     }
 
     match /bookings/{id} {
-      allow create: if signedIn() && request.resource.data.athleteId == request.auth.uid && request.resource.data.status == 'pending' && request.resource.data.paymentStatus == 'unpaid';
+      allow create: if signedIn() && request.resource.data.athleteId == request.auth.uid &&
+        request.resource.data.status == 'pending' && request.resource.data.paymentStatus == 'unpaid' &&
+        request.resource.data.coachId is string && request.resource.data.serviceId is string && request.resource.data.slotId is string;
       allow read: if admin() || (signedIn() && (resource.data.athleteId == request.auth.uid || resource.data.coachId == request.auth.uid));
       allow update: if admin() || (coach() && resource.data.coachId == request.auth.uid &&
         request.resource.data.athleteId == resource.data.athleteId && request.resource.data.coachId == resource.data.coachId);
@@ -53,14 +58,20 @@ service cloud.firestore {
     }
 
     match /consultationRequests/{id} {
-      allow create: if request.resource.data.status == 'pending';
+      allow create: if request.resource.data.status == 'pending' &&
+        request.resource.data.athleteName is string && request.resource.data.athleteName.size() > 0 && request.resource.data.athleteName.size() <= 100 &&
+        request.resource.data.athleteEmail is string && request.resource.data.athleteEmail.size() > 3 && request.resource.data.athleteEmail.size() <= 128 &&
+        request.resource.data.coachId is string && request.resource.data.coachName is string &&
+        request.resource.data.preferredSlot is string && request.resource.data.preferredSlot.size() <= 100;
       allow read: if admin() || (signedIn() && (resource.data.athleteId == request.auth.uid || resource.data.coachId == request.auth.uid));
       allow update: if admin() || (coach() && resource.data.coachId == request.auth.uid);
       allow delete: if admin();
     }
 
     match /contactMessages/{id} {
-      allow create: if request.resource.data.name is string && request.resource.data.email is string && request.resource.data.message is string;
+      allow create: if request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100 &&
+        request.resource.data.email is string && request.resource.data.email.size() > 3 && request.resource.data.email.size() <= 128 &&
+        request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 2000;
       allow read, update, delete: if admin();
     }
 
