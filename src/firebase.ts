@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import {
   getFirestore, doc, getDoc, setDoc, collection, addDoc, query, where, getDocs,
-  onSnapshot, serverTimestamp, updateDoc, writeBatch, orderBy
+  onSnapshot, serverTimestamp, writeBatch, orderBy, runTransaction
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -157,9 +157,17 @@ export async function createAvailabilitySlot(startAt: Date, endAt: Date) {
 export async function createBooking(data: { coachId:string; serviceId:string; slotId:string }) {
   const user = auth.currentUser; if (!user) throw new Error('Devi accedere per prenotare.');
   const bookingRef = doc(collection(db, 'bookings'));
-  await setDoc(bookingRef, {
-    id: bookingRef.id, athleteId:user.uid, coachId:data.coachId, serviceId:data.serviceId, slotId:data.slotId,
-    status:'pending', paymentStatus:'unpaid', createdAt:serverTimestamp(), updatedAt:serverTimestamp()
+  const slotRef = doc(db, 'coachAvailability', data.slotId);
+  await runTransaction(db, async tx => {
+    const slot = await tx.get(slotRef);
+    if (!slot.exists() || slot.data().coachId !== data.coachId || slot.data().status !== 'available') {
+      throw new Error('Questo orario non è più disponibile.');
+    }
+    tx.set(bookingRef, {
+      id: bookingRef.id, athleteId:user.uid, coachId:data.coachId, serviceId:data.serviceId, slotId:data.slotId,
+      status:'pending', paymentStatus:'unpaid', createdAt:serverTimestamp(), updatedAt:serverTimestamp()
+    });
+    tx.update(slotRef, { status:'reserved', bookingId:bookingRef.id, updatedAt:serverTimestamp() });
   });
   return bookingRef.id;
 }
