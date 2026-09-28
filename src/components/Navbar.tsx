@@ -75,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentUser.displayName ? currentUser.displayName[0].toUpperCase() : 'U'}
                 </div>
               )}
-              <span className="max-w-[120px] truncate">{currentUser.displayName || 'Profilo'}</span>
+              <span className="max-w-[120px] truncate">{isAdmin ? 'Dashboard Admin' : (currentUser.displayName || 'Profilo')}</span>
               <span className="rounded-full bg-[#8EF5DC]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#8EF5DC]">
                 {isAdmin ? 'Admin' : profile?.role === 'coach' ? 'Coach' : 'Atleta'}
               </span>
@@ -157,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {currentUser.displayName ? currentUser.displayName[0].toUpperCase() : 'U'}
                     </div>
                   )}
-                  <span className="truncate max-w-[180px]">{currentUser.displayName || 'Mio Profilo'}</span>
+                  <span className="truncate max-w-[180px]">{isAdmin ? 'Dashboard Admin' : (currentUser.displayName || 'Mio Profilo')}</span>
                 </div>
                 <span className="rounded-full bg-[#8EF5DC]/10 px-2 py-0.5 text-xs font-semibold text-[#8EF5DC]">
                   {isAdmin ? 'Admin' : profile?.role === 'coach' ? 'Coach' : 'Atleta'}
