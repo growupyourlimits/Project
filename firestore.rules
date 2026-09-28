@@ -36,15 +36,24 @@ service cloud.firestore {
       allow read: if resource.data.active == true || admin() || (signedIn() && resource.data.coachId == request.auth.uid);
       allow create: if coach() && request.resource.data.coachId == request.auth.uid;
       allow update, delete: if admin() || (coach() && resource.data.coachId == request.auth.uid &&
-        request.resource.data.coachId == resource.data.coachId) ||
-        (signedIn() && resource.data.status == 'available' && resource.data.coachId == request.resource.data.coachId &&
-        request.resource.data.status == 'reserved' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','bookingId','updatedAt']));
+        request.resource.data.coachId == resource.data.coachId);
     }
 
     match /coachAvailability/{id} {
       allow read: if resource.data.status == 'available' || admin() || (signedIn() && resource.data.coachId == request.auth.uid);
       allow create: if coach() && request.resource.data.coachId == request.auth.uid && request.resource.data.status == 'available';
-      allow update, delete: if admin() || (coach() && resource.data.coachId == request.auth.uid && request.resource.data.coachId == resource.data.coachId);
+      allow update: if admin() ||
+        (coach() && resource.data.coachId == request.auth.uid && request.resource.data.coachId == resource.data.coachId) ||
+        (signedIn() &&
+          resource.data.status == 'available' &&
+          request.resource.data.coachId == resource.data.coachId &&
+          request.resource.data.status == 'reserved' &&
+          request.resource.data.bookingId is string &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','bookingId','updatedAt']) &&
+          getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.athleteId == request.auth.uid &&
+          getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.coachId == resource.data.coachId &&
+          getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.slotId == id);
+      allow delete: if admin() || (coach() && resource.data.coachId == request.auth.uid);
     }
 
     match /bookings/{id} {
