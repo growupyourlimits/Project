@@ -59,10 +59,21 @@ service cloud.firestore {
     match /bookings/{id} {
       allow create: if signedIn() && request.resource.data.athleteId == request.auth.uid &&
         request.resource.data.status == 'pending' && request.resource.data.paymentStatus == 'unpaid' &&
-        request.resource.data.coachId is string && request.resource.data.serviceId is string && request.resource.data.slotId is string;
+        request.resource.data.coachId is string && request.resource.data.serviceId is string && request.resource.data.slotId is string &&
+        get(/databases/$(database)/documents/coachServices/$(request.resource.data.serviceId)).data.coachId == request.resource.data.coachId &&
+        get(/databases/$(database)/documents/coachServices/$(request.resource.data.serviceId)).data.active == true &&
+        getAfter(/databases/$(database)/documents/coachAvailability/$(request.resource.data.slotId)).data.coachId == request.resource.data.coachId &&
+        getAfter(/databases/$(database)/documents/coachAvailability/$(request.resource.data.slotId)).data.status == 'reserved' &&
+        getAfter(/databases/$(database)/documents/coachAvailability/$(request.resource.data.slotId)).data.bookingId == id;
       allow read: if admin() || (signedIn() && (resource.data.athleteId == request.auth.uid || resource.data.coachId == request.auth.uid));
       allow update: if admin() || (coach() && resource.data.coachId == request.auth.uid &&
-        request.resource.data.athleteId == resource.data.athleteId && request.resource.data.coachId == resource.data.coachId);
+        request.resource.data.athleteId == resource.data.athleteId &&
+        request.resource.data.coachId == resource.data.coachId &&
+        request.resource.data.serviceId == resource.data.serviceId &&
+        request.resource.data.slotId == resource.data.slotId &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.status in ['pending','confirmed','completed','cancelled'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));
       allow delete: if admin();
     }
 
