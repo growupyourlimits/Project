@@ -21,7 +21,7 @@ import {
   TrainingModality,
   Coach,
 } from '../types';
-import { listApprovedCoaches, submitConsultationRequest } from '../firebase';
+import { listApprovedCoaches, listCoachAvailability, submitConsultationRequest } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
 interface QuestionnaireModalProps {
@@ -68,11 +68,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
   const [selectedCoachForBooking, setSelectedCoachForBooking] = useState<Coach | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
   const [approvedCoaches, setApprovedCoaches] = useState<Coach[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<{id:string; label:string}[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   // Booking fields
   const [athleteName, setAthleteName] = useState<string>('');
   const [athleteEmail, setAthleteEmail] = useState<string>('');
-  const [preferredSlot, setPreferredSlot] = useState<string>('Domani - 10:00 (Mattina)');
+  const [preferredSlot, setPreferredSlot] = useState<string>('');
   const [bookingLoading, setBookingLoading] = useState<boolean>(false);
 
   // Pre-fill user if authenticated
@@ -124,6 +126,35 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
         setApprovedCoaches([]);
       });
   }, [isOpen, answers.sport, answers.goal, answers.modality]);
+
+  useEffect(() => {
+    if (!selectedCoachForBooking) {
+      setAvailableSlots([]);
+      setPreferredSlot('');
+      return;
+    }
+    setSlotsLoading(true);
+    listCoachAvailability(selectedCoachForBooking.id)
+      .then((slots:any[]) => {
+        const now = Date.now();
+        const formatted = slots
+          .map((slot:any) => {
+            const start = slot.startAt?.toDate ? slot.startAt.toDate() : new Date(slot.startAt);
+            return { id:slot.id, start, label:start.toLocaleString('it-IT', { weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) };
+          })
+          .filter((slot:any) => !Number.isNaN(slot.start.getTime()) && slot.start.getTime() > now)
+          .sort((a:any,b:any) => a.start.getTime() - b.start.getTime())
+          .map(({id,label}:any) => ({id,label}));
+        setAvailableSlots(formatted);
+        setPreferredSlot(formatted[0]?.label || '');
+      })
+      .catch((err) => {
+        console.error('Errore caricamento disponibilità coach', err);
+        setAvailableSlots([]);
+        setPreferredSlot('');
+      })
+      .finally(() => setSlotsLoading(false));
+  }, [selectedCoachForBooking]);
 
   // Close on ESC key
   useEffect(() => {
@@ -420,21 +451,29 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({ isOpen, 
                         <label className="block text-xs font-medium text-[#9EABA7] mb-1">
                           Giorno e orario preferito per la call
                         </label>
-                        <select
-                          value={preferredSlot}
-                          onChange={(e) => setPreferredSlot(e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
-                        >
-                          <option className="bg-[#111A1A]">Domani - 10:00 (Mattina)</option>
-                          <option className="bg-[#111A1A]">Domani - 14:30 (Pomeriggio)</option>
-                          <option className="bg-[#111A1A]">Dopodomani - 18:30 (Sera)</option>
-                          <option className="bg-[#111A1A]">Sabato mattina - 10:30</option>
-                        </select>
+                        {slotsLoading ? (
+                          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Caricamento disponibilità...
+                          </div>
+                        ) : availableSlots.length > 0 ? (
+                          <select
+                            required
+                            value={preferredSlot}
+                            onChange={(e) => setPreferredSlot(e.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-4 py-2.5 text-sm text-[#F4F5F6] focus:border-[#8EF5DC] focus:outline-none"
+                          >
+                            {availableSlots.map(slot => <option key={slot.id} value={slot.label} className="bg-[#111A1A]">{slot.label}</option>)}
+                          </select>
+                        ) : (
+                          <div className="rounded-xl border border-white/10 bg-[#111A1A] px-4 py-3 text-sm text-[#9EABA7]">
+                            Questo coach non ha ancora pubblicato disponibilità.
+                          </div>
+                        )}
                       </div>
 
                       <button
                         type="submit"
-                        disabled={bookingLoading}
+                        disabled={bookingLoading || slotsLoading || availableSlots.length === 0}
                         className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-[#8EF5DC] py-3 text-sm font-semibold text-[#080A0A] hover:bg-[#77eecf] disabled:opacity-50 transition-all min-h-[44px]"
                       >
                         {bookingLoading ? (
