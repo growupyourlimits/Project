@@ -23,6 +23,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
   const [coachProfileLink, setCoachProfileLink] = useState('');
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachSubmitted, setCoachSubmitted] = useState(false);
+  const [coachDocuments, setCoachDocuments] = useState<File[]>([]);
 
   // Login form state
   const [authLoading, setAuthLoading] = useState(false);
@@ -50,6 +51,7 @@ export const InfoModals: React.FC<InfoModalProps> = ({
         email: coachEmail,
         discipline: coachDiscipline,
         profileLink: coachProfileLink,
+        documents: coachDocuments,
       });
       setCoachSubmitted(true);
     } catch (err) {
@@ -196,6 +198,12 @@ export const InfoModals: React.FC<InfoModalProps> = ({
                       placeholder="https://..."
                       className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-2 text-sm text-[#F4F5F6] placeholder:text-[#525E5C] focus:border-[#8EF5DC] focus:outline-none"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-[#9EABA7] mb-1">Documenti di qualifica (PDF/immagini)</label>
+                    <input type="file" multiple accept=".pdf,image/*" onChange={(e) => setCoachDocuments(Array.from(e.target.files || []))} className="w-full rounded-xl border border-white/10 bg-[#111A1A] px-3.5 py-2 text-xs text-[#9EABA7]" />
+                    <p className="mt-1 text-[11px] text-[#65716f]">Carica laurea, brevetti o certificazioni utili alla verifica.</p>
                   </div>
 
                   <button
